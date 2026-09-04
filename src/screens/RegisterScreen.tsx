@@ -16,7 +16,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChevronLeft } from 'lucide-react-native';
 import { Logo } from '../components/common/Logo';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { AuthStackParamList } from '../navigation/types';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
@@ -25,7 +24,6 @@ export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const { signUp } = useAuth();
-  const { colors, isDarkMode } = useTheme();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -74,7 +72,7 @@ export const RegisterScreen: React.FC = () => {
     <KeyboardAvoidingView
       style={[
         styles.container,
-        { backgroundColor: isDarkMode ? '#121214' : '#FFFFFF' },
+        { backgroundColor: '#FFFFFF' },
       ]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
@@ -96,15 +94,15 @@ export const RegisterScreen: React.FC = () => {
             style={[
               styles.backButton,
               {
-                borderColor: isDarkMode ? '#2D2D3A' : '#F1F1F5',
-                backgroundColor: isDarkMode ? '#1E1E26' : '#FAFAFC',
+                borderColor: '#F1F1F5',
+                backgroundColor: '#FAFAFC',
               },
             ]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <ChevronLeft
               size={20}
-              color={isDarkMode ? '#E2E8F0' : '#374151'}
+              color="#374151"
             />
           </TouchableOpacity>
 
@@ -115,7 +113,7 @@ export const RegisterScreen: React.FC = () => {
         <Text
           style={[
             styles.title,
-            { color: isDarkMode ? '#F8FAFC' : '#111827' },
+            { color: '#111827' },
           ]}
         >
           Olá! Cadastre-se para começar.
@@ -127,9 +125,7 @@ export const RegisterScreen: React.FC = () => {
             style={[
               styles.errorBox,
               {
-                backgroundColor: isDarkMode
-                  ? 'rgba(239, 68, 68, 0.15)'
-                  : '#FEF2F2',
+                backgroundColor: '#FEF2F2',
               },
             ]}
           >
@@ -143,13 +139,13 @@ export const RegisterScreen: React.FC = () => {
             style={[
               styles.input,
               {
-                backgroundColor: isDarkMode ? '#1E1E26' : '#F8FAFC',
-                color: colors.text,
-                borderColor: isDarkMode ? '#2D2D3A' : '#E2E8F0',
+                backgroundColor: '#F8FAFC',
+                color: '#111827',
+                borderColor: '#E2E8F0',
               },
             ]}
             placeholder="Seu Nome"
-            placeholderTextColor={isDarkMode ? '#64748B' : '#9CA3AF'}
+            placeholderTextColor="#9CA3AF"
             value={name}
             onChangeText={setName}
             autoCapitalize="words"
@@ -159,13 +155,13 @@ export const RegisterScreen: React.FC = () => {
             style={[
               styles.input,
               {
-                backgroundColor: isDarkMode ? '#1E1E26' : '#F8FAFC',
-                color: colors.text,
-                borderColor: isDarkMode ? '#2D2D3A' : '#E2E8F0',
+                backgroundColor: '#F8FAFC',
+                color: '#111827',
+                borderColor: '#E2E8F0',
               },
             ]}
             placeholder="Seu Email"
-            placeholderTextColor={isDarkMode ? '#64748B' : '#9CA3AF'}
+            placeholderTextColor="#9CA3AF"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -176,13 +172,13 @@ export const RegisterScreen: React.FC = () => {
             style={[
               styles.input,
               {
-                backgroundColor: isDarkMode ? '#1E1E26' : '#F8FAFC',
-                color: colors.text,
-                borderColor: isDarkMode ? '#2D2D3A' : '#E2E8F0',
+                backgroundColor: '#F8FAFC',
+                color: '#111827',
+                borderColor: '#E2E8F0',
               },
             ]}
             placeholder="Sua senha (mínimo 6 caracteres)"
-            placeholderTextColor={isDarkMode ? '#64748B' : '#9CA3AF'}
+            placeholderTextColor="#9CA3AF"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -192,13 +188,13 @@ export const RegisterScreen: React.FC = () => {
             style={[
               styles.input,
               {
-                backgroundColor: isDarkMode ? '#1E1E26' : '#F8FAFC',
-                color: colors.text,
-                borderColor: isDarkMode ? '#2D2D3A' : '#E2E8F0',
+                backgroundColor: '#F8FAFC',
+                color: '#111827',
+                borderColor: '#E2E8F0',
               },
             ]}
             placeholder="Confirme sua senha"
-            placeholderTextColor={isDarkMode ? '#64748B' : '#9CA3AF'}
+            placeholderTextColor="#9CA3AF"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
@@ -210,7 +206,7 @@ export const RegisterScreen: React.FC = () => {
           style={[
             styles.submitButton,
             {
-              backgroundColor: isDarkMode ? '#FFFFFF' : '#111827',
+              backgroundColor: '#111827',
               opacity: loading ? 0.7 : 1,
             },
           ]}
@@ -221,13 +217,13 @@ export const RegisterScreen: React.FC = () => {
           {loading ? (
             <ActivityIndicator
               size="small"
-              color={isDarkMode ? '#111827' : '#FFFFFF'}
+              color="#FFFFFF"
             />
           ) : (
             <Text
               style={[
                 styles.submitButtonText,
-                { color: isDarkMode ? '#111827' : '#FFFFFF' },
+                { color: '#FFFFFF' },
               ]}
             >
               Cadastrar
@@ -240,7 +236,7 @@ export const RegisterScreen: React.FC = () => {
           <Text
             style={[
               styles.footerText,
-              { color: isDarkMode ? '#CBD5E1' : '#4B5563' },
+              { color: '#4B5563' },
             ]}
           >
             Já tem uma conta?{' '}

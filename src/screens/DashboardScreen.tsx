@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -8,9 +9,11 @@ import {
   StatusBar,
   Image,
   useWindowDimensions,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -23,8 +26,10 @@ import { Transaction, Subscription, Goal, CreditCardType } from '../types';
 import { UpcomingBillsModal } from '../components/modals/UpcomingBillsModal';
 import { PayCardBillModal } from '../components/modals/PayCardBillModal';
 import { NotificationsModal } from '../components/modals/NotificationsModal';
+import { pushNotificationService, type SystemNotification } from '../services/pushNotificationService';
 import { TransactionIcon } from '../components/common/TransactionIcon';
 import { BalanceSummaryCard } from '../components/common/BalanceSummaryCard';
+import { getGreetingForDate } from '../utils/greeting';
 import { RemoteIcon } from '../components/common/RemoteIcon';
 import {
   Bell,
@@ -203,6 +208,18 @@ const formatTransactionDateTime = (item: Transaction): string => {
 
 const formatDashboardAmount = (value: number, isVisible: boolean, options?: Intl.NumberFormatOptions) =>
   isVisible ? value.toLocaleString('pt-BR', options) : '••••••';
+const DASHBOARD_NOTIFICATIONS_LAST_SEEN_PREFIX = '@numvra:notifications:lastSeen:';
+
+const getNotificationCreatedAtMs = (notification: SystemNotification) => {
+  const value = notification.createdAt;
+  if (!value) return 0;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value?.seconds === 'number') return value.seconds * 1000;
+  if (typeof value === 'string') return new Date(value).getTime() || 0;
+  return 0;
+};
+
+const getNotificationBadgeLabel = (count: number) => (count > 99 ? '99+' : String(count));
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -218,8 +235,81 @@ export const DashboardScreen: React.FC = () => {
   const [cards, setCards] = useState<CreditCardType[]>([]);
   const [isUpcomingModalOpen, setIsUpcomingModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
   const [selectedCardForPayment, setSelectedCardForPayment] = useState<CreditCardType | null>(null);
   const [isPayCardModalOpen, setIsPayCardModalOpen] = useState(false);
+  const [greeting, setGreeting] = useState(() => getGreetingForDate(new Date()));
+
+  const refreshGreeting = useCallback(() => {
+    setGreeting(getGreetingForDate(new Date()));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshGreeting();
+    }, [refreshGreeting])
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') refreshGreeting();
+    });
+    return () => subscription.remove();
+  }, [refreshGreeting]);
+
+  useEffect(() => {
+    if (!user) {
+      setNotificationBadgeCount(0);
+      return;
+    }
+
+    const lastSeenKey = `${DASHBOARD_NOTIFICATIONS_LAST_SEEN_PREFIX}${user.uid}`;
+    let active = true;
+    let lastSeenMs = 0;
+    let latestItems: SystemNotification[] = [];
+
+    const updateBadge = () => {
+      const unseenCount = latestItems.filter((item) => getNotificationCreatedAtMs(item) > lastSeenMs).length;
+      setNotificationBadgeCount(unseenCount);
+    };
+
+    AsyncStorage.getItem(lastSeenKey).then((value) => {
+      if (!active) return;
+      lastSeenMs = Number(value || 0);
+      updateBadge();
+    });
+
+    const unsubscribe = pushNotificationService.listenToSystemNotifications(
+      user.uid,
+      (items) => {
+        if (!active) return;
+        latestItems = items;
+        updateBadge();
+      },
+      () => {
+        if (active) setNotificationBadgeCount(0);
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [user]);
+
+  const handleOpenNotifications = async () => {
+    if (!notificationAccess.allowed) {
+      triggerUpgrade?.('notification', notificationAccess.reason);
+      return;
+    }
+
+    if (user) {
+      await AsyncStorage.setItem(`${DASHBOARD_NOTIFICATIONS_LAST_SEEN_PREFIX}${user.uid}`, String(Date.now()));
+    }
+
+    setNotificationBadgeCount(0);
+    setIsNotificationsOpen(true);
+  };
 
   useEffect(() => {
     if (user) {
@@ -398,6 +488,7 @@ export const DashboardScreen: React.FC = () => {
     month: 'long',
     year: 'numeric',
   });
+  const displayName = profile?.displayName || user?.displayName || '';
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#121214' : '#f8fafc' }]}>
@@ -415,25 +506,28 @@ export const DashboardScreen: React.FC = () => {
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.greetingText}>Bom Dia!</Text>
-              <Text style={styles.userNameText}>
-                {profile?.displayName || user?.displayName || 'Usuário'}
-              </Text>
+              <Text style={styles.greetingText}>{greeting}</Text>
+              {!!displayName && (
+                <Text style={styles.userNameText}>
+                  {displayName}
+                </Text>
+              )}
             </View>
 
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.bellButton}
-                onPress={() => {
-                  if (!notificationAccess.allowed) {
-                    triggerUpgrade?.('notification', notificationAccess.reason);
-                    return;
-                  }
-                  setIsNotificationsOpen(true);
-                }}
+                onPress={handleOpenNotifications}
                 activeOpacity={0.8}
               >
                 <Bell size={20} color="#ffffff" />
+                {notificationBadgeCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText} numberOfLines={1}>
+                      {getNotificationBadgeLabel(notificationBadgeCount)}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -579,7 +673,7 @@ export const DashboardScreen: React.FC = () => {
                   {upcomingCards.length > 0 && (
                     <View style={styles.faturaBadge}>
                       <Text style={styles.faturaBadgeText}>
-                        💳 {upcomingCards.length}{' '}
+                        Cartao {upcomingCards.length}{' '}
                         {upcomingCards.length === 1 ? 'fatura' : 'faturas'}
                       </Text>
                     </View>
@@ -706,7 +800,7 @@ export const DashboardScreen: React.FC = () => {
                               {item.isCardCharge && (
                                 <View style={styles.cardTagBadge}>
                                   <Text style={styles.cardTagBadgeText}>
-                                    💳 {item.cardName ? item.cardName.split(' ')[0] : 'Cartão'}{' '}
+                                    Cartao {item.cardName ? item.cardName.split(' ')[0] : 'Cartão'}{' '}
                                     {item.installments && item.installments > 1
                                       ? `• Parcela ${item.currentInstallment || 1}/${item.installments}`
                                       : '• À vista'}
@@ -1024,7 +1118,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 32,
+    paddingBottom: 0,
   },
   header: {
     flexDirection: 'row',
@@ -1060,6 +1154,26 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#ef4444',
+    borderWidth: 2,
+    borderColor: '#4F46E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadgeText: {
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '900',
+    color: '#ffffff',
   },
   avatarBorder: {
     width: 40,
@@ -1233,6 +1347,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingTop: 12,
     paddingHorizontal: 20,
+    paddingBottom: 60,
     minHeight: 500,
   },
   sheetHandle: {
@@ -1451,3 +1566,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 });
+
+
+
+
+
+
+

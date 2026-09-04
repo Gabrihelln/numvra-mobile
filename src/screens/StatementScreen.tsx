@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +16,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Plus,
   Trash2,
+  Search,
+  X,
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -31,6 +34,49 @@ import { RootStackParamList } from '../navigation/types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type StatementSection = 'transactions' | 'subscriptions' | 'goals';
+type TransactionFilter = 'all' | 'income' | 'expense' | 'subscriptions' | 'card';
+
+const transactionFilters: { key: TransactionFilter; label: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'income', label: 'Receitas' },
+  { key: 'expense', label: 'Despesas' },
+  { key: 'subscriptions', label: 'Assinaturas' },
+  { key: 'card', label: 'Cartão' },
+];
+
+const normalizeSearch = (value?: string | null) => (value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLocaleLowerCase('pt-BR')
+  .trim();
+
+const transactionMatchesFilter = (transaction: Transaction, filter: TransactionFilter) => {
+  if (filter === 'all') return true;
+  if (filter === 'income') return transaction.type === 'income';
+  if (filter === 'expense') return transaction.type === 'expense' && !transaction.isCardCharge;
+  if (filter === 'subscriptions') {
+    return transaction.isRecurring === true || normalizeSearch(transaction.category) === 'assinaturas';
+  }
+  if (filter === 'card') {
+    return transaction.isCardCharge === true || !!transaction.cardId || transaction.paymentMethod === 'credit_card';
+  }
+  return true;
+};
+
+const transactionMatchesSearch = (transaction: Transaction, query: string) => {
+  const normalizedQuery = normalizeSearch(query);
+  if (!normalizedQuery) return true;
+
+  const fields = [
+    transaction.title,
+    transaction.description,
+    transaction.category,
+    transaction.cardName,
+    transaction.paymentMethod,
+  ];
+
+  return fields.some((field) => normalizeSearch(field).includes(normalizedQuery));
+};
 
 interface StatementScreenProps {
   section?: StatementSection;
@@ -47,6 +93,8 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionFilter, setTransactionFilter] = useState<TransactionFilter>('all');
 
   useEffect(() => {
     if (!user) return;
@@ -118,6 +166,24 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
     );
   };
 
+  const handleCreateSubscription = () => {
+    const check = checkLimit('subscription');
+    if (!check.allowed && triggerUpgrade) {
+      triggerUpgrade('subscription', check.reason);
+      return;
+    }
+    navigation.navigate('AddSubscriptionModal');
+  };
+
+  const handleCreateGoal = () => {
+    const check = checkLimit('goal');
+    if (!check.allowed && triggerUpgrade) {
+      triggerUpgrade('goal', check.reason);
+      return;
+    }
+    navigation.navigate('AddGoalModal');
+  };
+
   const handleDeleteGoal = (goal: Goal) => {
     Alert.alert(
       'Confirmar exclusão',
@@ -170,6 +236,14 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
     [transactions]
   );
 
+  const visibleTransactions = useMemo(
+    () => sortedTransactions.filter((transaction) =>
+      transactionMatchesFilter(transaction, transactionFilter) &&
+      transactionMatchesSearch(transaction, transactionSearch)
+    ),
+    [sortedTransactions, transactionFilter, transactionSearch]
+  );
+
   return (
     <View
       style={[
@@ -192,6 +266,17 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
         >
           {section === 'transactions' ? 'Extrato' : section === 'subscriptions' ? 'Assinaturas' : 'Metas'}
         </Text>
+        {section !== 'transactions' && (
+          <TouchableOpacity
+            onPress={section === 'subscriptions' ? handleCreateSubscription : handleCreateGoal}
+            style={[styles.headerActionButton, { backgroundColor: colors.primary }]}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={section === 'subscriptions' ? 'Criar nova assinatura' : 'Criar nova meta'}
+          >
+            <Plus size={20} color="#ffffff" strokeWidth={3} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Content */}
@@ -205,12 +290,55 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
           </View>
         ) : section === 'transactions' ? (
           <View style={styles.tabContent}>
-            {sortedTransactions.length === 0 ? (
+            <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Search size={18} color={colors.textMuted} />
+              <TextInput
+                value={transactionSearch}
+                onChangeText={setTransactionSearch}
+                placeholder="Pesquisar lançamento"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.searchInput, { color: colors.text }]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="Pesquisar lançamentos"
+              />
+              {!!transactionSearch && (
+                <TouchableOpacity onPress={() => setTransactionSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <X size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
+              {transactionFilters.map((filter) => {
+                const selected = transactionFilter === filter.key;
+                return (
+                  <TouchableOpacity
+                    key={filter.key}
+                    onPress={() => setTransactionFilter(filter.key)}
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: selected ? colors.primary : colors.card,
+                        borderColor: selected ? colors.primary : colors.border,
+                      },
+                    ]}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.filterChipText, { color: selected ? '#ffffff' : colors.textSecondary }]}>
+                      {filter.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {visibleTransactions.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Nenhuma transação encontrada.</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Nenhum lançamento encontrado.</Text>
               </View>
             ) : (
-              sortedTransactions.map((item) => (
+              visibleTransactions.map((item) => (
                 <View
                   key={item.id}
                   style={[
@@ -360,23 +488,12 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
               </View>
             ))}
 
-            <TouchableOpacity
-              style={styles.addDashedButton}
-              onPress={() => {
-                const check = checkLimit('subscription');
-                if (!check.allowed && triggerUpgrade) {
-                  triggerUpgrade('subscription', check.reason);
-                } else {
-                  navigation.navigate('AddSubscriptionModal');
-                }
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={styles.plusCircle}>
-                <Plus size={20} color="#6C5CE7" strokeWidth={3} />
+
+            {subscriptions.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Nenhuma assinatura cadastrada.</Text>
               </View>
-              <Text style={styles.addDashedText}>Criar Nova Assinatura</Text>
-            </TouchableOpacity>
+            )}
           </View>
         ) : (
           <View style={styles.tabContent}>
@@ -463,23 +580,12 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
               );
             })}
 
-            <TouchableOpacity
-              style={styles.addDashedButton}
-              onPress={() => {
-                const check = checkLimit('goal');
-                if (!check.allowed && triggerUpgrade) {
-                  triggerUpgrade('goal', check.reason);
-                } else {
-                  navigation.navigate('AddGoalModal');
-                }
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={styles.plusCircle}>
-                <Plus size={20} color="#6C5CE7" strokeWidth={3} />
+
+            {goals.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Nenhuma meta cadastrada.</Text>
               </View>
-              <Text style={styles.addDashedText}>Criar Nova Meta</Text>
-            </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -505,6 +611,16 @@ const styles = StyleSheet.create({
     left: 16,
     bottom: 12,
   },
+  headerActionButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
@@ -515,6 +631,37 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     gap: 12,
+  },
+  searchBar: {
+    height: 46,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
+  filterChips: {
+    gap: 8,
+    paddingRight: 16,
+  },
+  filterChip: {
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   loadingContainer: {
     padding: 40,

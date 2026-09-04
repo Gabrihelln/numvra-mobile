@@ -5,19 +5,17 @@ import { LandingScreen } from '../screens/LandingScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
-import { useTheme } from '../contexts/ThemeContext';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export const AuthNavigator: React.FC = () => {
-  const { colors } = useTheme();
 
   return (
     <Stack.Navigator
       initialRouteName="Landing"
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: { backgroundColor: '#FFFFFF' },
         animation: 'slide_from_right',
       }}
     >

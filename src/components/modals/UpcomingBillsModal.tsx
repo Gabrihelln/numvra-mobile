@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   StyleSheet,
   Image,
@@ -12,8 +10,8 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { Subscription, CreditCardType } from '../../types';
 import { X, AlertCircle, CreditCard, Sparkles, CheckCircle2 } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RemoteIcon } from '../common/RemoteIcon';
+import { SwipeableBottomSheet } from '../common/SwipeableBottomSheet';
 
 interface UpcomingBillsModalProps {
   isOpen: boolean;
@@ -33,7 +31,6 @@ export const UpcomingBillsModal: React.FC<UpcomingBillsModalProps> = ({
   onPayCard,
 }) => {
   const { colors, isDarkMode } = useTheme();
-  const insets = useSafeAreaInsets();
   const [payingId, setPayingId] = useState<string | null>(null);
 
   const handlePaySub = async (sub: Subscription) => {
@@ -48,59 +45,35 @@ export const UpcomingBillsModal: React.FC<UpcomingBillsModalProps> = ({
   const totalBillsCount = upcomingSubs.length + upcomingCards.length;
 
   return (
-    <Modal
-      visible={isOpen}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+    <SwipeableBottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      backgroundColor={isDarkMode ? '#18181b' : '#ffffff'}
+      borderColor={isDarkMode ? '#27272a' : '#f1f5f9'}
+      handleColor={isDarkMode ? '#3f3f46' : '#e2e8f0'}
+      maxHeight="80%"
+      contentStyle={styles.sheetContainer}
+      scrollContentStyle={styles.scrollList}
     >
-      <View style={styles.modalOverlay}>
+      <View style={styles.header}>
+        <View style={styles.headerTitleRow}>
+          <AlertCircle size={18} color="#ef4444" strokeWidth={2.5} />
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Contas a Pagar</Text>
+        </View>
         <TouchableOpacity
-          style={styles.backdrop}
-          activeOpacity={1}
           onPress={onClose}
-        />
-
-        <View
-          style={[
-            styles.sheetContainer,
-            {
-              backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
-              borderTopColor: isDarkMode ? '#27272a' : '#f1f5f9',
-              paddingBottom: Math.max(32, insets.bottom + 16),
-            },
-          ]}
+          style={[styles.closeButton, { backgroundColor: isDarkMode ? '#27272a' : '#f1f5f9' }]}
+          activeOpacity={0.7}
         >
-          {/* Drag handle */}
-          <View style={[styles.dragHandle, { backgroundColor: isDarkMode ? '#3f3f46' : '#e2e8f0' }]} />
+          <X size={18} color={isDarkMode ? '#a1a1aa' : '#64748b'} />
+        </TouchableOpacity>
+      </View>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerTitleRow}>
-              <AlertCircle size={20} color="#ef4444" strokeWidth={2.5} />
-              <Text style={[styles.headerTitle, { color: isDarkMode ? '#f4f4f5' : '#111118' }]}>
-                Contas a Pagar
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={[styles.closeButton, { backgroundColor: isDarkMode ? '#27272a' : '#f1f5f9' }]}
-              activeOpacity={0.7}
-            >
-              <X size={18} color={isDarkMode ? '#a1a1aa' : '#64748b'} />
-            </TouchableOpacity>
-          </View>
+      <Text style={[styles.description, { color: isDarkMode ? '#a1a1aa' : '#64748b' }]}>
+        Faturas de cartão de crédito e assinaturas recorrentes com vencimento próximo. Ao confirmar o pagamento, o limite é restabelecido.
+      </Text>
 
-          {/* Description */}
-          <Text style={[styles.description, { color: isDarkMode ? '#a1a1aa' : '#64748b' }]}>
-            Faturas de cartão de crédito e assinaturas recorrentes com vencimento próximo. Ao confirmar o pagamento, o limite é restabelecido.
-          </Text>
-
-          <ScrollView
-            contentContainerStyle={styles.scrollList}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Credit Card Bills */}
+      {/* Credit Card Bills */}
             {upcomingCards.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionHeader}>
@@ -230,10 +203,7 @@ export const UpcomingBillsModal: React.FC<UpcomingBillsModalProps> = ({
                 </Text>
               </View>
             )}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </SwipeableBottomSheet>
   );
 };
 
@@ -254,11 +224,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingHorizontal: 20,
     paddingBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 20,
   },
   dragHandle: {
     width: 44,

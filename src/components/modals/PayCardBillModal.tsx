@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Modal,
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  TouchableWithoutFeedback,
-  ScrollView,
   ActivityIndicator,
   Switch,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import {
   X,
@@ -24,7 +19,7 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { CreditCardType } from '../../types';
 import { spacing, borderRadius, typography } from '../../theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SwipeableBottomSheet } from '../common/SwipeableBottomSheet';
 
 export interface PayCardBillData {
   card: CreditCardType;
@@ -50,7 +45,6 @@ export const PayCardBillModal: React.FC<PayCardBillModalProps> = ({
   onConfirm,
 }) => {
   const { colors, isDarkMode } = useTheme();
-  const insets = useSafeAreaInsets();
   const [paymentType, setPaymentType] = useState<'total' | 'partial'>('total');
   const [paidAmountInput, setPaidAmountInput] = useState<string>('');
   const [isInstallmentRest, setIsInstallmentRest] = useState<boolean>(false);
@@ -136,35 +130,16 @@ export const PayCardBillModal: React.FC<PayCardBillModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={isOpen}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+    <SwipeableBottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      backgroundColor={colors.card}
+      borderColor={colors.border}
+      handleColor={isDarkMode ? '#27272a' : '#e4e4e7'}
+      maxHeight="90%"
+      contentStyle={styles.bottomSheet}
+      scrollContentStyle={styles.scrollContent}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardAvoidingView}
-      >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.bottomSheet,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.md),
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.handleBar,
-                  { backgroundColor: isDarkMode ? '#27272a' : '#e4e4e7' },
-                ]}
-              />
 
               {/* Header */}
               <View style={styles.header}>
@@ -186,11 +161,7 @@ export const PayCardBillModal: React.FC<PayCardBillModalProps> = ({
                 </TouchableOpacity>
               </View>
 
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.scrollContent}
-              >
+
                 {/* Total Open Bill Banner */}
                 <View
                   style={[
@@ -506,13 +477,7 @@ export const PayCardBillModal: React.FC<PayCardBillModalProps> = ({
                     )}
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
-            </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </Modal>
+    </SwipeableBottomSheet>
   );
 };
 

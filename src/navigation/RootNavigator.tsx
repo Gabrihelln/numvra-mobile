@@ -16,7 +16,7 @@ import { PlaceholderScreen } from '../screens/PlaceholderScreen';
 import { AddGoalScreen } from '../screens/AddGoalScreen';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { SplashVisual } from '../screens/SplashScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 export const RootNavigator: React.FC = () => {
@@ -48,11 +48,7 @@ export const RootNavigator: React.FC = () => {
       };
 
   if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <SplashVisual />;
   }
 
   return (
@@ -103,10 +99,3 @@ export const RootNavigator: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

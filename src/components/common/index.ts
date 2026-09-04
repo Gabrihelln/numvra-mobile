@@ -12,3 +12,5 @@ export * from './PeripheralGlowBackground';
 export * from './TransactionIcon';
 export * from './RemoteIcon';
 export * from './BackButton';
+export * from './SwipeableBottomSheet';
+

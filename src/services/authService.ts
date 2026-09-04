@@ -32,7 +32,7 @@ export const authService = {
   /** Authenticate with the native Android Google Sign-In module and Firebase. */
   signInWithGoogle: async (): Promise<UserCredential> => {
     if (Platform.OS !== 'android') {
-      throw new Error('O login com Google estÃ¡ disponÃ­vel apenas no Android.');
+      throw new Error('O login com Google está disponível apenas no Android.');
     }
 
     const webClientId = Config.GOOGLE_WEB_CLIENT_ID;
@@ -49,7 +49,7 @@ export const authService = {
       throw new Error('Login com Google cancelado.');
     }
     if (!response.data.idToken) {
-      throw new Error('O Google nÃ£o retornou um token de identificaÃ§Ã£o.');
+      throw new Error('O Google não retornou um token de identificação.');
     }
 
     return await signInWithCredential(
@@ -61,7 +61,7 @@ export const authService = {
   /** Authenticate with the native iOS Apple sheet and Firebase. */
   signInWithApple: async (): Promise<UserCredential> => {
     if (Platform.OS !== 'ios') {
-      throw new Error('O login com Apple estÃ¡ disponÃ­vel apenas no iOS.');
+      throw new Error('O login com Apple está disponível apenas no iOS.');
     }
 
     const appleCredential = await appleAuth.performRequest({
@@ -73,7 +73,7 @@ export const authService = {
     });
 
     if (!appleCredential.identityToken) {
-      throw new Error('A Apple nÃ£o retornou um token de identificaÃ§Ã£o.');
+      throw new Error('A Apple não retornou um token de identificação.');
     }
 
     const provider = new OAuthProvider('apple.com');

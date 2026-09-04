@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,26 +16,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
 import { Logo } from '../components/common/Logo';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { AuthStackParamList } from '../navigation/types';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
-const GoogleSigninButton = Platform.OS === 'android'
-  ? require('@react-native-google-signin/google-signin').GoogleSigninButton
-  : null;
+type AuthLoadingType = 'email' | 'google' | 'apple' | null;
+
+const GoogleLogo = () => (
+  <Svg width={20} height={20} viewBox="0 0 48 48" accessibilityLabel="Google">
+    <Path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+    <Path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+    <Path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+    <Path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+  </Svg>
+);
 
 export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const { signIn, signInWithGoogle, signInWithApple } = useAuth();
-  const { colors, isDarkMode } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loadingType, setLoadingType] = useState<AuthLoadingType>(null);
   const [error, setError] = useState('');
   const [isAppleAvailable, setIsAppleAvailable] = useState(false);
 
@@ -49,7 +56,7 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    setLoading(true);
+    setLoadingType('email');
     setError('');
 
     try {
@@ -69,12 +76,12 @@ export const LoginScreen: React.FC = () => {
         setError('Falha ao entrar. Tente novamente.');
       }
     } finally {
-      setLoading(false);
+      setLoadingType(null);
     }
   };
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
+    setLoadingType('google');
     setError('');
     try {
       await signInWithGoogle();
@@ -82,12 +89,12 @@ export const LoginScreen: React.FC = () => {
       console.error('Google login error:', err);
       setError(err?.message || 'Falha ao entrar com Google. Tente novamente.');
     } finally {
-      setLoading(false);
+      setLoadingType(null);
     }
   };
 
   const handleAppleLogin = async () => {
-    setLoading(true);
+    setLoadingType('apple');
     setError('');
     try {
       await signInWithApple();
@@ -97,15 +104,19 @@ export const LoginScreen: React.FC = () => {
         setError(err?.message || 'Falha ao entrar com Apple. Tente novamente.');
       }
     } finally {
-      setLoading(false);
+      setLoadingType(null);
     }
   };
+
+  const isLoading = loadingType !== null;
+  const isEmailLoading = loadingType === 'email';
+  const isGoogleLoading = loadingType === 'google';
 
   return (
     <KeyboardAvoidingView
       style={[
         styles.container,
-        { backgroundColor: isDarkMode ? '#121214' : '#FFFFFF' },
+        { backgroundColor: '#FFFFFF' },
       ]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
@@ -127,15 +138,15 @@ export const LoginScreen: React.FC = () => {
             style={[
               styles.backButton,
               {
-                borderColor: isDarkMode ? '#2D2D3A' : '#F1F1F5',
-                backgroundColor: isDarkMode ? '#1E1E26' : '#FAFAFC',
+                borderColor: '#F1F1F5',
+                backgroundColor: '#FAFAFC',
               },
             ]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <ChevronLeft
               size={20}
-              color={isDarkMode ? '#E2E8F0' : '#374151'}
+              color="#374151"
             />
           </TouchableOpacity>
 
@@ -146,7 +157,7 @@ export const LoginScreen: React.FC = () => {
         <Text
           style={[
             styles.title,
-            { color: isDarkMode ? '#F8FAFC' : '#111827' },
+            { color: '#111827' },
           ]}
         >
           Bem-vindo de volta!{'\n'}Que bom te ver novamente!
@@ -158,9 +169,7 @@ export const LoginScreen: React.FC = () => {
             style={[
               styles.errorBox,
               {
-                backgroundColor: isDarkMode
-                  ? 'rgba(239, 68, 68, 0.15)'
-                  : '#FEF2F2',
+                backgroundColor: '#FEF2F2',
               },
             ]}
           >
@@ -174,13 +183,13 @@ export const LoginScreen: React.FC = () => {
             style={[
               styles.input,
               {
-                backgroundColor: isDarkMode ? '#1E1E26' : '#F8FAFC',
-                color: colors.text,
-                borderColor: isDarkMode ? '#2D2D3A' : '#E2E8F0',
+                backgroundColor: '#F8FAFC',
+                color: '#111827',
+                borderColor: '#E2E8F0',
               },
             ]}
             placeholder="Seu email"
-            placeholderTextColor={isDarkMode ? '#64748B' : '#9CA3AF'}
+            placeholderTextColor="#9CA3AF"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -193,13 +202,13 @@ export const LoginScreen: React.FC = () => {
                 styles.input,
                 styles.passwordInput,
                 {
-                  backgroundColor: isDarkMode ? '#1E1E26' : '#F8FAFC',
-                  color: colors.text,
-                  borderColor: isDarkMode ? '#2D2D3A' : '#E2E8F0',
+                  backgroundColor: '#F8FAFC',
+                  color: '#111827',
+                  borderColor: '#E2E8F0',
                 },
               ]}
               placeholder="Sua senha"
-              placeholderTextColor={isDarkMode ? '#64748B' : '#9CA3AF'}
+              placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -212,10 +221,10 @@ export const LoginScreen: React.FC = () => {
               {showPassword ? (
                 <EyeOff
                   size={20}
-                  color={isDarkMode ? '#94A3B8' : '#9CA3AF'}
+                  color="#9CA3AF"
                 />
               ) : (
-                <Eye size={20} color={isDarkMode ? '#94A3B8' : '#9CA3AF'} />
+                <Eye size={20} color="#9CA3AF" />
               )}
             </TouchableOpacity>
           </View>
@@ -229,7 +238,7 @@ export const LoginScreen: React.FC = () => {
           <Text
             style={[
               styles.forgotPasswordText,
-              { color: isDarkMode ? '#94A3B8' : '#6B7280' },
+              { color: '#6B7280' },
             ]}
           >
             Esqueceu sua senha?
@@ -237,50 +246,55 @@ export const LoginScreen: React.FC = () => {
         </TouchableOpacity>
 
         {/* Submit button */}
-        <TouchableOpacity
-          style={[
+        <Pressable
+          style={({ pressed }) => [
             styles.submitButton,
             {
-              backgroundColor: isDarkMode ? '#FFFFFF' : '#111827',
-              opacity: loading ? 0.7 : 1,
+              backgroundColor: '#6C5CE7',
+              opacity: isLoading && !isEmailLoading ? 0.72 : pressed ? 0.9 : 1,
             },
           ]}
           onPress={handleLogin}
-          disabled={loading}
-          activeOpacity={0.85}
+          disabled={isLoading}
+          accessibilityRole="button"
         >
-          {loading ? (
-            <ActivityIndicator
-              size="small"
-              color={isDarkMode ? '#111827' : '#FFFFFF'}
-            />
+          {isEmailLoading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Text
-              style={[
-                styles.submitButtonText,
-                { color: isDarkMode ? '#111827' : '#FFFFFF' },
-              ]}
-            >
-              Entrar
-            </Text>
+            <Text style={styles.submitButtonText}>Entrar</Text>
           )}
-        </TouchableOpacity>
+        </Pressable>
 
         {(Platform.OS === 'android' || isAppleAvailable) && (
           <View style={styles.socialSection}>
             <View style={styles.divider} />
-            <Text style={[styles.dividerText, { backgroundColor: isDarkMode ? '#121214' : '#FFFFFF', color: isDarkMode ? '#64748B' : '#9CA3AF' }]}>
+            <Text style={[styles.dividerText, { backgroundColor: '#FFFFFF', color: '#9CA3AF' }]}>
               Ou entre com
             </Text>
 
-            {GoogleSigninButton && (
-              <GoogleSigninButton
-                style={styles.googleButton}
-                size={GoogleSigninButton.Size.Wide}
-                color={GoogleSigninButton.Color.Light}
+            {Platform.OS === 'android' && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.googleButton,
+                  {
+                    backgroundColor: '#FFFFFF',
+                    borderColor: '#E2E8F0',
+                    opacity: isLoading && !isGoogleLoading ? 0.72 : pressed ? 0.88 : 1,
+                  },
+                ]}
                 onPress={handleGoogleLogin}
-                disabled={loading}
-              />
+                disabled={isLoading}
+                accessibilityRole="button"
+              >
+                {isGoogleLoading ? (
+                  <ActivityIndicator size="small" color="#6C5CE7" />
+                ) : (
+                  <>
+                    <GoogleLogo />
+                    <Text style={[styles.googleButtonText, { color: '#111827' }]}>Entrar com Google</Text>
+                  </>
+                )}
+              </Pressable>
             )}
 
             {isAppleAvailable && (
@@ -289,7 +303,7 @@ export const LoginScreen: React.FC = () => {
                 buttonStyle={AppleButton.Style.BLACK}
                 cornerRadius={14}
                 style={styles.appleButton}
-                onPress={handleAppleLogin}
+                onPress={() => { if (!isLoading) handleAppleLogin(); }}
               />
             )}
           </View>
@@ -300,7 +314,7 @@ export const LoginScreen: React.FC = () => {
           <Text
             style={[
               styles.footerText,
-              { color: isDarkMode ? '#CBD5E1' : '#4B5563' },
+              { color: '#4B5563' },
             ]}
           >
             Não tem uma conta?{' '}
@@ -395,6 +409,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   submitButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -420,6 +435,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 52,
     marginBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   appleButton: {
     width: '100%',

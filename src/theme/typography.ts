@@ -1,44 +1,83 @@
-import { TextStyle } from 'react-native';
+﻿import { Platform, TextStyle } from 'react-native';
+
+export const fontFamilies = {
+  regular: 'Inter-Regular',
+  medium: 'Inter-Medium',
+  semibold: 'Inter-SemiBold',
+  bold: 'Inter-Bold',
+} as const;
+
+export type FontWeightToken = keyof typeof fontFamilies;
+
+export const fontForWeight = (weight?: TextStyle['fontWeight']) => {
+  const normalized = String(weight || '400');
+  if (normalized === '700' || normalized === '800' || normalized === '900' || normalized === 'bold') {
+    return fontFamilies.bold;
+  }
+  if (normalized === '600') return fontFamilies.semibold;
+  if (normalized === '500' || normalized === 'medium') return fontFamilies.medium;
+  return fontFamilies.regular;
+};
+
+export const withFont = (style: TextStyle, family: FontWeightToken = 'regular') => ({
+  ...style,
+  fontFamily: fontFamilies[family],
+  ...(Platform.OS === 'android' ? { fontWeight: 'normal' as TextStyle['fontWeight'] } : {}),
+});
 
 export const typography = {
-  h1: {
+  h1: withFont({
     fontSize: 28,
-    fontWeight: '700',
     lineHeight: 34,
-  } as TextStyle,
-  h2: {
+  }, 'bold') as TextStyle,
+  h2: withFont({
     fontSize: 22,
-    fontWeight: '700',
     lineHeight: 28,
-  } as TextStyle,
-  h3: {
+  }, 'bold') as TextStyle,
+  h3: withFont({
     fontSize: 18,
-    fontWeight: '600',
     lineHeight: 24,
-  } as TextStyle,
-  bodyLarge: {
+  }, 'semibold') as TextStyle,
+  bodyLarge: withFont({
     fontSize: 16,
-    fontWeight: '400',
     lineHeight: 22,
-  } as TextStyle,
-  bodyMedium: {
+  }) as TextStyle,
+  bodyMedium: withFont({
     fontSize: 14,
-    fontWeight: '400',
     lineHeight: 20,
-  } as TextStyle,
-  bodySmall: {
+  }) as TextStyle,
+  bodySmall: withFont({
     fontSize: 12,
-    fontWeight: '400',
     lineHeight: 16,
-  } as TextStyle,
-  caption: {
+  }) as TextStyle,
+  caption: withFont({
     fontSize: 11,
-    fontWeight: '500',
     lineHeight: 14,
-  } as TextStyle,
-  button: {
+  }, 'medium') as TextStyle,
+  label: withFont({
+    fontSize: 12,
+    lineHeight: 16,
+  }, 'semibold') as TextStyle,
+  button: withFont({
     fontSize: 15,
-    fontWeight: '600',
     lineHeight: 20,
-  } as TextStyle,
+  }, 'semibold') as TextStyle,
+  subtitle: withFont({
+    fontSize: 16,
+    lineHeight: 22,
+  }, 'semibold') as TextStyle,
+  title: withFont({
+    fontSize: 18,
+    lineHeight: 24,
+  }, 'bold') as TextStyle,
+  heading: withFont({
+    fontSize: 22,
+    lineHeight: 28,
+  }, 'bold') as TextStyle,
+  amount: withFont({
+    fontSize: 18,
+    lineHeight: 22,
+  }, 'semibold') as TextStyle,
 };
+
+export type TypographyVariant = keyof typeof typography;

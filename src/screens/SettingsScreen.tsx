@@ -37,10 +37,17 @@ export const SettingsScreen: React.FC = () => {
       return;
     }
 
-    return pushNotificationService.listenToPreference(user.uid, (preference) => {
-      setNotificationsEnabled(preference.enabled);
-      setPermissionStatus(preference.permissionStatus);
-    });
+    return pushNotificationService.listenToPreference(
+      user.uid,
+      (preference) => {
+        setNotificationsEnabled(preference.enabled);
+        setPermissionStatus(preference.permissionStatus);
+      },
+      () => {
+        setNotificationsEnabled(false);
+        setPermissionStatus('unavailable');
+      }
+    );
   }, [user]);
 
   const getNotificationSubtitle = () => {

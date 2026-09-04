@@ -246,8 +246,8 @@ export const AddSubscriptionScreen: React.FC = () => {
                   >
                     <RemoteIcon
                       uri={service.iconUrl}
-                      size={28}
-                      fallback={<ServiceIcon size={26} color={isSelected ? '#ffffff' : serviceVisual.color} />}
+                      size={24}
+                      fallback={<ServiceIcon size={24} color={isSelected ? '#ffffff' : serviceVisual.color} />}
                     />
                   </View>
                   <Text
@@ -327,7 +327,7 @@ export const AddSubscriptionScreen: React.FC = () => {
                 { backgroundColor: colors.card },
               ]}
             >
-              <CalendarIcon size={24} color={colors.primary} />
+              <CalendarIcon size={20} color={colors.primary} />
             </View>
             <View>
               <Text style={[styles.dateSubLabel, { color: colors.textMuted }]}>
@@ -338,7 +338,7 @@ export const AddSubscriptionScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-          <ChevronRight size={24} color={colors.textMuted} />
+          <ChevronRight size={20} color={colors.textMuted} />
         </TouchableOpacity>
 
         {/* Botão Salvar Assinatura */}
@@ -390,21 +390,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
   },
   closeButton: {
     padding: spacing.xs,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
   },
   headerSpacer: {
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   },
   amountSection: {
     alignItems: 'center',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
   },
   amountLabel: {
     fontSize: 13,
@@ -427,12 +427,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   amountCurrency: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     opacity: 0.6,
   },
   amountInput: {
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: '700',
     padding: 0,
     margin: 0,
@@ -441,35 +441,35 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     gap: spacing.sm,
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '700',
   },
   descriptionInput: {
-    height: 64,
-    paddingHorizontal: spacing.xl,
+    height: 46,
+    paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
-    fontSize: 18,
+    fontSize: 16,
   },
   servicesSection: {
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
   },
   servicesTitle: {
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   searchContainer: {
-    height: 52,
+    height: 46,
     borderWidth: 1,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   searchInput: {
     flex: 1,
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   serviceItem: {
     width: '30%',
@@ -489,9 +489,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   serviceIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 46,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -517,13 +517,13 @@ const styles = StyleSheet.create({
   },
   dateButton: {
     width: '100%',
-    height: 80,
-    borderRadius: 24,
+    height: 64,
+    borderRadius: 18,
     paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
   },
   dateLeft: {
     flexDirection: 'row',
@@ -552,8 +552,8 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     width: '100%',
-    height: 72,
-    borderRadius: 24,
+    height: 58,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
 });

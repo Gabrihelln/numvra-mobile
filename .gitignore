@@ -1,4 +1,4 @@
-# Dependencies
+﻿# Dependencies
 node_modules/
 
 # Environment files
@@ -49,3 +49,9 @@ Thumbs.db
 
 # Local generated exports
 .audit-export/
+
+
+# Firebase Admin local credentials
+firebase-admin-key.json
+*-firebase-adminsdk-*.json
+service-account*.json

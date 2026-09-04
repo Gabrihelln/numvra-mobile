@@ -67,10 +67,17 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
     }
 
     setLoading(true);
-    const unsubscribe = pushNotificationService.listenToSystemNotifications(user.uid, (items) => {
-      setNotifications(items);
-      setLoading(false);
-    });
+    const unsubscribe = pushNotificationService.listenToSystemNotifications(
+      user.uid,
+      (items) => {
+        setNotifications(items);
+        setLoading(false);
+      },
+      () => {
+        setNotifications([]);
+        setLoading(false);
+      }
+    );
 
     return unsubscribe;
   }, [isOpen, user]);
@@ -341,10 +348,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 24,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
   },
   dragHandle: {
     width: 48,

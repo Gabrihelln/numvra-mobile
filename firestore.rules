@@ -1,0 +1,194 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Master Catch-All Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Primtive define
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+
+    // 3. User Blueprint
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) && 
+             data.keys().size() <= 20 &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.email is string && data.email.size() <= 256;
+    }
+
+    // Push notification preferences and device tokens
+    function isValidPushPreference(data) {
+      return data.keys().hasOnly(['enabled', 'permissionStatus', 'token', 'updatedAt']) &&
+             data.enabled is bool &&
+             data.permissionStatus in ['authorized', 'denied', 'notDetermined', 'unavailable'] &&
+             (!('token' in data) || data.token == null || data.token is string);
+    }
+
+    function isValidPushToken(data) {
+      return data.keys().hasOnly(['token', 'enabled', 'platform', 'createdAt', 'updatedAt']) &&
+             data.token is string &&
+             data.token.size() <= 4096 &&
+             data.enabled is bool &&
+             data.platform in ['android', 'ios', 'web', 'windows', 'macos'];
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming());
+
+      match /settings/{settingId} {
+        allow get: if isOwner(userId);
+        allow list: if false;
+        allow create, update: if isOwner(userId) &&
+                              settingId == 'push_notifications' &&
+                              isValidPushPreference(incoming());
+        allow delete: if false;
+      }
+
+      match /push_tokens/{tokenId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidPushToken(incoming());
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // 4. Transaction Blueprint
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['userId', 'title', 'amount', 'date', 'type']) &&
+             data.keys().size() <= 15 &&
+             data.userId == request.auth.uid &&
+             data.title is string && data.title.size() <= 100 &&
+             data.amount is number &&
+             data.date is string &&
+             data.type in ['income', 'expense'];
+    }
+
+    match /transactions/{transactionId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidTransaction(incoming());
+      allow update: if isSignedIn() && isValidTransaction(incoming()) && 
+                    incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    }
+
+    // Credit Cards Blueprint
+    function isValidCard(data) {
+      return data.keys().hasAll(['userId', 'name', 'brand', 'finalDigits', 'expiration', 'bestDay', 'totalLimit']) &&
+             data.keys().size() <= 15 &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 100 &&
+             data.brand is string &&
+             data.finalDigits is string &&
+             data.totalLimit is number;
+    }
+
+    match /cards/{cardId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidCard(incoming());
+      allow update: if isSignedIn() && isValidCard(incoming()) && 
+                    incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    }
+
+    // 5. Subscription Blueprint
+    function isValidSubscription(data) {
+      return data.keys().hasAll(['userId', 'name', 'amount', 'period', 'nextBilling']) &&
+             data.keys().size() <= 10 &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 100 &&
+             data.amount is number &&
+             data.period in ['Mensal', 'Trimestral', 'Semestral', 'Anual'];
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidSubscription(incoming());
+      allow update: if isSignedIn() && isValidSubscription(incoming()) && 
+                    incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    }
+
+    // 6. Goal Blueprint
+    function isValidGoal(data) {
+      return data.keys().hasAll(['userId', 'title', 'currentAmount', 'targetAmount']) &&
+             data.keys().size() <= 10 &&
+             data.userId == request.auth.uid &&
+             data.title is string && data.title.size() <= 100 &&
+             data.currentAmount is number &&
+             data.targetAmount is number;
+    }
+
+    match /goals/{goalId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidGoal(incoming());
+      allow update: if isSignedIn() && isValidGoal(incoming()) && 
+                    incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    }
+
+    // 7. Budget Category Blueprint
+    function isValidBudgetCategory(data) {
+      return data.keys().hasAll(['userId', 'name', 'percentage', 'icon']) &&
+             data.keys().size() <= 8 &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 100 &&
+             data.percentage is number &&
+             data.icon is string && data.icon.size() <= 50;
+    }
+
+    match /budgets/{budgetId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidBudgetCategory(incoming());
+      allow update: if isSignedIn() && isValidBudgetCategory(incoming()) && 
+                    incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
+    }
+
+    // 8. Subscription Templates (Public Catalog)
+    match /subscription_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+    }
+
+    // 9. Subscription Plans (Configurable SaaS Catalog)
+    match /subscription_plans/{planId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // System-wide notifications shown inside the app.
+    match /system_notifications/{notificationId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId;
+
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+    }
+  }
+}

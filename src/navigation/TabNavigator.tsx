@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { BottomTabBarProps, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
@@ -13,6 +13,7 @@ import { CreditCard, Plus, Receipt, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Logo } from '../components/common/Logo';
 import { ThemeColors } from '../theme/colors';
+import { typography } from '../theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -240,3 +241,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+

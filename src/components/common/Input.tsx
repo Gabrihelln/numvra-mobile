@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
   View,
   TextInput,
@@ -68,8 +68,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   label: {
-    ...typography.caption,
-    fontWeight: '600',
+    ...typography.label,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -91,3 +90,4 @@ const styles = StyleSheet.create({
     ...typography.caption,
   },
 });
+

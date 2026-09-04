@@ -8,11 +8,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
-  useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
 import { CalendarPicker } from '../components/common/CalendarPicker';
+import { SwipeableBottomSheet } from '../components/common/SwipeableBottomSheet';
 import { spacing, borderRadius, typography } from '../theme';
 import { CreditCardType } from '../types';
 import { useBudgets } from '../hooks/useBudgets';
@@ -39,8 +37,6 @@ export const AddScreen: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
   const { user, checkLimit, triggerUpgrade } = useAuth();
   const { activeBudgetCategories, loading: categoriesLoading } = useBudgets();
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
 
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [description, setDescription] = useState('');
@@ -172,29 +168,16 @@ export const AddScreen: React.FC = () => {
     : (isDarkMode ? '#34d399' : '#86efac');
 
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardAvoidingView}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <SwipeableBottomSheet
+      useModal={false}
+      onClose={() => navigation.goBack()}
+      backgroundColor={colors.background}
+      borderColor={colors.border}
+      handleColor={isDarkMode ? '#3f3f46' : '#d4d4d8'}
+      maxHeight="84%"
+      scrollContentStyle={styles.contentContainer}
+      keyboardBehavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.modalBackdrop} />
-      <View
-        style={[
-          styles.bottomSheet,
-          {
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            maxHeight: height * 0.84,
-            paddingBottom: Math.max(spacing.lg, insets.bottom + spacing.sm),
-          },
-        ]}
-      >
-      <View style={[styles.handle, { backgroundColor: isDarkMode ? '#3f3f46' : '#d4d4d8' }]} />
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
         {/* Header com X e Título */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -535,9 +518,7 @@ export const AddScreen: React.FC = () => {
           selectedDate={selectedDate}
           onSelect={setSelectedDate}
         />
-      </ScrollView>
-      </View>
-    </KeyboardAvoidingView>
+    </SwipeableBottomSheet>
   );
 };
 

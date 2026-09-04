@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Animated,
   Platform,
@@ -23,7 +23,6 @@ export const LandingScreen: React.FC = () => {
 
   const logoYAnim = useRef(new Animated.Value(0)).current;
   const logoScaleAnim = useRef(new Animated.Value(1.15)).current;
-  const buttonOpacityAnim = useRef(new Animated.Value(0)).current;
   const buttonYAnim = useRef(new Animated.Value(60)).current;
 
   useEffect(() => {
@@ -47,11 +46,6 @@ export const LandingScreen: React.FC = () => {
           tension: 30,
           useNativeDriver: true,
         }),
-        Animated.timing(buttonOpacityAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
         Animated.spring(buttonYAnim, {
           toValue: 0,
           friction: 8,
@@ -62,7 +56,7 @@ export const LandingScreen: React.FC = () => {
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [user, loading, logoYAnim, logoScaleAnim, buttonOpacityAnim, buttonYAnim]);
+  }, [user, loading, logoYAnim, logoScaleAnim, buttonYAnim]);
 
   return (
     <View style={styles.container}>
@@ -82,31 +76,36 @@ export const LandingScreen: React.FC = () => {
       </View>
 
       {/* Bottom buttons */}
-      <Animated.View
-        style={[
-          styles.buttonContainer,
-          {
-            opacity: buttonOpacityAnim,
-            transform: [{ translateY: buttonYAnim }],
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={() => navigation.navigate('Login')}
-          activeOpacity={0.9}
+      {!isSplashing && (
+        <Animated.View
+          style={[
+            styles.buttonContainer,
+            {
+              transform: [{ translateY: buttonYAnim }],
+            },
+          ]}
         >
-          <Text style={styles.loginButtonText}>Entrar</Text>
-        </TouchableOpacity>
+          <Pressable
+            style={({ pressed }) => [
+              styles.loginButton,
+              pressed && styles.loginButtonPressed,
+            ]}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.loginButtonText}>Entrar</Text>
+          </Pressable>
 
-        <TouchableOpacity
-          style={styles.registerButton}
-          onPress={() => navigation.navigate('Register')}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.registerButtonText}>Cadastrar</Text>
-        </TouchableOpacity>
-      </Animated.View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.registerButton,
+              pressed && styles.registerButtonPressed,
+            ]}
+            onPress={() => navigation.navigate('Register')}
+          >
+            <Text style={styles.registerButtonText}>Cadastrar</Text>
+          </Pressable>
+        </Animated.View>
+      )}
     </View>
   );
 };
@@ -150,6 +149,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  loginButtonPressed: {
+    backgroundColor: '#0F172A',
+  },
   loginButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
@@ -158,12 +160,15 @@ const styles = StyleSheet.create({
   registerButton: {
     width: '100%',
     height: 52,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: '#111827',
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  registerButtonPressed: {
+    backgroundColor: '#F8FAFC',
   },
   registerButtonText: {
     color: '#111827',
