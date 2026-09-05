@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>999637138962-aouc3fajsiv9r0jnbl84u46cmrbh5c2p.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.999637138962-aouc3fajsiv9r0jnbl84u46cmrbh5c2p</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>999637138962-bnjstg6gtu3ebad3ec6c9ca9q5fhq8re.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyArow0whMef-0fz7gB_CTYq-boAoGBOMzc</string>
+	<key>GCM_SENDER_ID</key>
+	<string>999637138962</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.numvra.app</string>
+	<key>PROJECT_ID</key>
+	<string>numvra-main</string>
+	<key>STORAGE_BUCKET</key>
+	<string>numvra-main.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<true/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:999637138962:ios:3ca8ebcd8d6f2b950ba2cb</string>
+</dict>
+</plist>
