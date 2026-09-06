@@ -51,10 +51,16 @@ type LegacyTransactionFields = Transaction & {
   installmentAmount?: number;
 };
 
+const toFiniteNumber = (value: unknown) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : 0;
+};
 export const CardsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { width: screenWidth } = useWindowDimensions();
   const CARD_WIDTH = screenWidth - spacing.lg * 2;
+  const CARD_GAP = spacing.md;
+  const CARD_ITEM_WIDTH = CARD_WIDTH + CARD_GAP;
   const { colors, isDarkMode } = useTheme();
   const { user, checkLimit, triggerUpgrade } = useAuth();
 
@@ -98,27 +104,44 @@ export const CardsScreen: React.FC = () => {
   const activeCard = (cards[selectedCardIndex] || null) as LegacyCreditCardFields | null;
   const cardAccess = checkLimit('card');
 
-  // Lógica de cálculo de fatura e limites
-  const usedLimit = activeCard?.usedLimit || 0;
-  const totalLimit = activeCard?.limit || activeCard?.totalLimit || 0;
-  const availableLimit = Math.max(0, totalLimit - usedLimit);
-  const limitUsedPercent =
-    totalLimit > 0 ? Math.min(100, Math.round((usedLimit / totalLimit) * 100)) : 0;
-  const isMonthPaid = activeCard?.isMonthPaid || false;
+  const toFiniteNumber = (value: unknown) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : 0;
+  };
 
-  // Lançamentos filtrados para o cartão selecionado
   const cardTransactions = useMemo(
     () =>
-      transactions
-        .filter(
-          (tx) =>
-            (tx.isCardCharge || tx.cardId) &&
-            (activeCard?.id ? tx.cardId === activeCard.id : true)
-        )
-        .slice(0, 10),
+      transactions.filter(
+        (tx) =>
+          (tx.isCardCharge || tx.cardId) &&
+          (activeCard?.id ? tx.cardId === activeCard.id : true)
+      ),
     [transactions, activeCard?.id]
   );
 
+  const cardChargeTotal = useMemo(
+    () =>
+      cardTransactions.reduce((total, tx) => {
+        if (tx.type !== 'expense') return total;
+        return total + Math.abs(toFiniteNumber(tx.amount));
+      }, 0),
+    [cardTransactions]
+  );
+
+  // Lógica de cálculo de fatura e limites
+  const rawUsedLimit = activeCard?.usedLimit;
+  const usedLimit = Math.max(0, toFiniteNumber(rawUsedLimit ?? cardChargeTotal));
+  const totalLimit = Math.max(
+    0,
+    toFiniteNumber(activeCard?.totalLimit ?? activeCard?.creditLimit ?? activeCard?.limit)
+  );
+  const availableLimit = Math.max(0, totalLimit - usedLimit);
+  const limitUsedPercent = totalLimit > 0
+    ? Math.min(Math.max((usedLimit / totalLimit) * 100, 0), 100)
+    : 0;
+  const limitUsedPercentLabel = Math.round(limitUsedPercent);
+  const isMonthPaid = activeCard?.isMonthPaid || false;
+  const latestCardTransactions = cardTransactions.slice(0, 10);
   // Handlers de Ações
   const handlePayBillConfirm = async (data: PayCardBillData) => {
     if (!cardAccess.allowed) {
@@ -315,12 +338,14 @@ export const CardsScreen: React.FC = () => {
           <View style={styles.cardsCarouselSection}>
             <ScrollView
               horizontal
-              pagingEnabled
               showsHorizontalScrollIndicator={false}
+              snapToInterval={CARD_ITEM_WIDTH}
+              decelerationRate="fast"
+              disableIntervalMomentum
               contentContainerStyle={styles.cardsScrollTrack}
               onMomentumScrollEnd={(e) => {
                 const offsetX = e.nativeEvent.contentOffset.x;
-                const newIdx = Math.round(offsetX / (CARD_WIDTH + spacing.md));
+                const newIdx = Math.round(offsetX / CARD_ITEM_WIDTH);
                 if (newIdx >= 0 && newIdx < cards.length) {
                   setSelectedCardIndex(newIdx);
                 }
@@ -692,7 +717,7 @@ export const CardsScreen: React.FC = () => {
                 </Text>
                 <Text style={[styles.smallStatValue, { color: colors.text }]}>
                   {showValues
-                    ? `R$ ${usedLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${limitUsedPercent}%)`
+                    ? `R$ ${usedLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${limitUsedPercentLabel}%)`
                     : '••••••'}
                 </Text>
               </View>
@@ -716,9 +741,9 @@ export const CardsScreen: React.FC = () => {
         </View>
 
         {/* Lista de Transações */}
-        {cardTransactions.length > 0 ? (
+        {latestCardTransactions.length > 0 ? (
           <View style={styles.transactionsList}>
-            {cardTransactions.map((tx) => (
+            {latestCardTransactions.map((tx) => (
               <View
                 key={tx.id}
                 style={[
@@ -835,6 +860,7 @@ const styles = StyleSheet.create({
   },
   cardsScrollTrack: {
     gap: spacing.md,
+    paddingRight: spacing.md,
   },
   creditCardVisual: {
     height: 200,

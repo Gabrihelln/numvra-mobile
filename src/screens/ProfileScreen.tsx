@@ -301,7 +301,7 @@ export const ProfileScreen: React.FC = () => {
     [
       {
         icon: LogOut,
-        label: 'Log out',
+        label: 'Sair',
         onPress: handleLogout,
         iconColor: '#EF4444',
         iconBg: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
@@ -314,7 +314,10 @@ export const ProfileScreen: React.FC = () => {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: Math.max(insets.top, 16) + 12 },
+          {
+            paddingTop: Math.max(insets.top, 16) + 12,
+            paddingBottom: Math.max(insets.bottom, 12) + 98,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -426,7 +429,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
   },
   screenTitle: {
     fontSize: 22,

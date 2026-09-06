@@ -1,72 +1,51 @@
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { SubscriptionPlan } from '../types';
-
-const COLLECTION_NAME = 'subscription_plans';
 
 export const DEFAULT_PLANS: SubscriptionPlan[] = [
   {
-    id: "basic",
-    name: "Basic",
-    description: "Recursos essenciais para o dia a dia",
+    id: 'basic',
+    name: 'Basic',
+    description: 'Recursos essenciais para o dia a dia',
     monthlyPrice: 0,
     semiannualPrice: 0,
     annualPrice: 0,
     features: [
-      "Extrato ilimitado",
-      "Até 3 assinaturas ou contas ativas",
-      "1 meta de poupança"
-    ]
+      'Extrato ilimitado',
+      'At\u00e9 3 assinaturas ou contas ativas',
+      '1 meta de poupan\u00e7a',
+    ],
   },
   {
-    id: "pro",
-    name: "Pro",
-    description: "Recursos avançados e análise de dados",
+    id: 'pro',
+    name: 'Pro',
+    description: 'Recursos avan\u00e7ados e an\u00e1lise de dados',
     monthlyPrice: 9.90,
     semiannualPrice: 8.91,
     annualPrice: 7.92,
     features: [
-      "Extrato ilimitado",
-      "Até 5 assinaturas ou contas ativas",
-      "Metas de poupança ilimitadas",
-      "Alertas de vencimento ativos"
-    ]
+      'Extrato ilimitado',
+      'At\u00e9 5 assinaturas ou contas ativas',
+      'Metas de poupan\u00e7a ilimitadas',
+      'Alertas de vencimento ativos',
+    ],
   },
   {
-    id: "premium",
-    name: "Premium",
-    description: "A experiência financeira definitiva",
+    id: 'premium',
+    name: 'Premium',
+    description: 'A experi\u00eancia financeira definitiva',
     monthlyPrice: 19.90,
     semiannualPrice: 17.91,
     annualPrice: 15.92,
-    badge: "COMPLETO",
+    badge: 'COMPLETO',
     features: [
-      "Tudo do Pro",
-      "Assinaturas e contas ativas ilimitadas",
-      "Cartões de crédito ativos",
-      "Budgets por categoria ilimitados",
-      "Notificações ativas"
-    ]
-  }
+      'Tudo do Pro',
+      'Assinaturas e contas ativas ilimitadas',
+      'Cart\u00f5es de cr\u00e9dito ativos',
+      'Budgets por categoria ilimitados',
+      'Notifica\u00e7\u00f5es ativas',
+    ],
+  },
 ];
 
 export const planService = {
-  getSubscriptionPlans: async (): Promise<SubscriptionPlan[]> => {
-    try {
-      const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
-      if (querySnapshot.empty) return DEFAULT_PLANS;
-      
-      const plans = querySnapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      })) as SubscriptionPlan[];
-      
-      const order = ["basic", "pro", "premium"];
-      return plans.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.GET, COLLECTION_NAME);
-      return DEFAULT_PLANS;
-    }
-  },
+  getSubscriptionPlans: async (): Promise<SubscriptionPlan[]> => DEFAULT_PLANS,
 };

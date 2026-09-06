@@ -1,23 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ChevronLeft, Check, Sparkles } from 'lucide-react-native';
+import { Check, ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { planService } from '../services/planService';
 import { checkoutService, CheckoutError } from '../services/checkoutService';
-import { SubscriptionPlan } from '../types';
+import { planService } from '../services/planService';
 import { RootStackParamList } from '../navigation/types';
+import { SubscriptionPlan } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type BillingPeriod = 'monthly' | 'semiannual' | 'annual';
@@ -25,7 +25,7 @@ type BillingPeriod = 'monthly' | 'semiannual' | 'annual';
 export const PlanScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { profile } = useAuth();
+  const { activePlan } = useAuth();
   const { isDarkMode } = useTheme();
 
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -39,26 +39,35 @@ export const PlanScreen: React.FC = () => {
       try {
         const data = await planService.getSubscriptionPlans();
         setPlans(data);
+        if (data.some((plan) => plan.id === activePlan)) {
+          setSelectedPlanId(activePlan);
+        }
       } catch (err) {
         console.error('Error loading plans:', err);
       } finally {
         setLoadingPlans(false);
       }
     }
+
     load();
-  }, []);
+  }, [activePlan]);
 
   const handleSubscribe = async () => {
     const selectedPlan = plans.find((p) => p.id === selectedPlanId);
     if (!selectedPlan) return;
 
+    if (selectedPlanId === activePlan) {
+      Alert.alert('Plano atual', `Voc\u00ea j\u00e1 utiliza o plano ${selectedPlan.name}.`);
+      return;
+    }
+
     if (selectedPlanId === 'basic') {
-      const isCurrentlyPaid = profile?.plan === 'pro' || profile?.plan === 'premium';
+      const isCurrentlyPaid = activePlan === 'pro' || activePlan === 'premium';
       Alert.alert(
         isCurrentlyPaid ? 'Gerenciamento da assinatura' : 'Plano Basic',
         isCurrentlyPaid
-          ? 'O cancelamento será disponibilizado pelo portal seguro de assinaturas.'
-          : 'Você já utiliza o plano Basic gratuito.',
+          ? 'O cancelamento ser\u00e1 disponibilizado pelo portal seguro de assinaturas.'
+          : 'Voc\u00ea j\u00e1 utiliza o plano Basic gratuito.',
       );
       return;
     }
@@ -72,15 +81,18 @@ export const PlanScreen: React.FC = () => {
       await checkoutService.startCheckout(selectedPlanId, selectedPlan.name, selectedPeriod, price);
       Alert.alert(
         'Checkout aberto',
-        'Conclua o pagamento no Stripe. Seu plano será atualizado automaticamente após a confirmação.',
+        'Conclua o pagamento no Stripe. Seu plano ser\u00e1 atualizado automaticamente ap\u00f3s a confirma\u00e7\u00e3o.',
       );
     } catch (err) {
-      const message = err instanceof CheckoutError ? err.message : 'Não foi possível iniciar o checkout.';
+      const message = err instanceof CheckoutError ? err.message : 'N\u00e3o foi poss\u00edvel iniciar o checkout.';
       Alert.alert('Erro no pagamento', message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
+  const selectedPlanName = selectedPlan?.name || 'Plano';
 
   return (
     <View
@@ -89,7 +101,6 @@ export const PlanScreen: React.FC = () => {
         { backgroundColor: isDarkMode ? '#121214' : '#FAF9FF' },
       ]}
     >
-      {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -121,7 +132,6 @@ export const PlanScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Title */}
         <View style={styles.titleSection}>
           <Text
             style={[
@@ -129,7 +139,7 @@ export const PlanScreen: React.FC = () => {
               { color: isDarkMode ? '#F8FAFC' : '#111827' },
             ]}
           >
-            Escolha o plano ideal para suas finanças
+            {'Escolha o plano ideal para suas finan\u00e7as'}
           </Text>
           <Text
             style={[
@@ -141,13 +151,10 @@ export const PlanScreen: React.FC = () => {
           </Text>
         </View>
 
-        {/* Period Selector */}
         <View
           style={[
             styles.periodSelector,
-            {
-              backgroundColor: isDarkMode ? '#1E1E26' : '#F1F1F5',
-            },
+            { backgroundColor: isDarkMode ? '#1E1E26' : '#F1F1F5' },
           ]}
         >
           <TouchableOpacity
@@ -214,7 +221,6 @@ export const PlanScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Plans */}
         {loadingPlans ? (
           <ActivityIndicator
             size="large"
@@ -225,11 +231,10 @@ export const PlanScreen: React.FC = () => {
           <View style={styles.plansContainer}>
             {plans.map((plan) => {
               const isSelected = selectedPlanId === plan.id;
-              const isCurrent =
-                (profile?.plan || 'basic') === plan.id;
+              const isCurrent = activePlan === plan.id;
 
               let displayPrice = plan.monthlyPrice;
-              let periodLabel = '/mês';
+              let periodLabel = '/m\u00eas';
               if (selectedPeriod === 'semiannual') {
                 displayPrice = plan.semiannualPrice;
                 periodLabel = '/semestre';
@@ -245,19 +250,21 @@ export const PlanScreen: React.FC = () => {
                     styles.planCard,
                     {
                       backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF',
-                      borderColor: isSelected
+                      borderColor: isCurrent
+                        ? '#4DF1CA'
+                        : isSelected
                         ? '#6C5CE7'
                         : isDarkMode
                         ? '#2D2D3A'
                         : '#F1F1F5',
-                      borderWidth: isSelected ? 2 : 1,
+                      borderWidth: isCurrent || isSelected ? 2 : 1,
                     },
                   ]}
                   onPress={() => setSelectedPlanId(plan.id)}
                   activeOpacity={0.85}
                 >
                   <View style={styles.planHeader}>
-                    <View>
+                    <View style={styles.planTitleColumn}>
                       <View style={styles.planNameRow}>
                         <Text
                           style={[
@@ -269,9 +276,12 @@ export const PlanScreen: React.FC = () => {
                         </Text>
                         {isCurrent && (
                           <View style={styles.currentBadge}>
-                            <Text style={styles.currentBadgeText}>
-                              Plano Atual
-                            </Text>
+                            <Text style={styles.currentBadgeText}>Plano Atual</Text>
+                          </View>
+                        )}
+                        {!!plan.badge && !isCurrent && (
+                          <View style={styles.planBadge}>
+                            <Text style={styles.planBadgeText}>{plan.badge}</Text>
                           </View>
                         )}
                       </View>
@@ -293,7 +303,7 @@ export const PlanScreen: React.FC = () => {
                     ]}
                   >
                     {plan.id === 'basic' ? (
-                      'Grátis'
+                      'Gr\u00e1tis'
                     ) : (
                       <>
                         R$ {displayPrice.toFixed(2).replace('.', ',')}{' '}
@@ -302,11 +312,10 @@ export const PlanScreen: React.FC = () => {
                     )}
                   </Text>
 
-                  {/* Features */}
                   <View style={styles.featuresList}>
                     {plan.features.map((feat, idx) => (
                       <View key={idx} style={styles.featureRow}>
-                        <Check size={16} color="#10B981" strokeWidth={3} />
+                        <Check size={16} color="#4DF1CA" strokeWidth={3} />
                         <Text
                           style={[
                             styles.featureText,
@@ -324,23 +333,26 @@ export const PlanScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Subscribe Action Button */}
         <TouchableOpacity
           style={[
             styles.subscribeButton,
-            { opacity: submitting ? 0.7 : 1 },
+            { opacity: submitting || selectedPlanId === activePlan ? 0.7 : 1 },
           ]}
           onPress={handleSubscribe}
-          disabled={submitting}
+          disabled={submitting || selectedPlanId === activePlan}
           activeOpacity={0.85}
         >
           {submitting ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <Text style={styles.subscribeButtonText}>
-              {selectedPlanId === 'basic'
+              {selectedPlanId === activePlan
+                ? 'Plano atual'
+                : selectedPlanId === 'basic'
                 ? 'Continuar com Basic'
-                : `Assinar ${plans.find((p) => p.id === selectedPlanId)?.name || 'Plano'}`}
+                : activePlan === 'basic'
+                ? `Assinar ${selectedPlanName}`
+                : `Fazer upgrade para ${selectedPlanName}`}
             </Text>
           )}
         </TouchableOpacity>
@@ -420,9 +432,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  planTitleColumn: {
+    flex: 1,
+  },
   planNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 4,
   },
@@ -431,12 +447,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   currentBadge: {
-    backgroundColor: '#6C5CE7',
+    backgroundColor: '#10B981',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   currentBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  planBadge: {
+    backgroundColor: '#6C5CE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  planBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '800',
@@ -466,6 +493,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   featureText: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '600',
   },
