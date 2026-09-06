@@ -71,7 +71,7 @@ export const LandingScreen: React.FC = () => {
             },
           ]}
         >
-          <Logo width={144} height={144} />
+          <Logo width={200} height={200} />
         </Animated.View>
       </View>
 
