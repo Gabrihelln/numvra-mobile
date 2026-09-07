@@ -27,11 +27,14 @@ import {
   Check,
 } from 'lucide-react-native';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { updateProfile } from 'firebase/auth';
+import { launchImageLibrary, type Asset } from 'react-native-image-picker';
+import { auth, db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { ModalBottomSheet } from '../components/common';
+import { profileService } from '../services/profileService';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -43,7 +46,6 @@ const AVATAR_PRESETS = [
   'https://api.dicebear.com/7.x/adventurer/png?seed=Clara',
   'https://api.dicebear.com/7.x/adventurer/png?seed=Sofia',
 ];
-
 interface EditProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -62,29 +64,77 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const { colors, isDarkMode } = useTheme();
   const [name, setName] = useState(currentName);
   const [photo, setPhoto] = useState(currentPhoto);
+  const [selectedPhotoAsset, setSelectedPhotoAsset] = useState<Asset | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
       setName(currentName);
       setPhoto(currentPhoto);
+      setSelectedPhotoAsset(null);
     }
   }, [isOpen, currentName, currentPhoto]);
+
+  const handleChoosePhoto = async () => {
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+      selectionLimit: 1,
+    });
+
+    if (result.didCancel) return;
+    if (result.errorCode) {
+      Alert.alert('Erro', result.errorMessage || 'Não foi possível selecionar a foto.');
+      return;
+    }
+
+    const asset = result.assets?.[0];
+    if (!asset?.uri) {
+      Alert.alert('Erro', 'Não foi possível selecionar a foto.');
+      return;
+    }
+
+    setSelectedPhotoAsset(asset);
+    setPhoto(asset.uri);
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
 
     setIsSubmitting(true);
     try {
+      let nextPhotoURL = photo.trim();
+
+      if (selectedPhotoAsset?.uri) {
+        nextPhotoURL = await profileService.uploadAvatar(selectedPhotoAsset);
+      }
+
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, {
         displayName: name.trim(),
-        photoURL: photo.trim(),
+        photoURL: nextPhotoURL,
       });
+
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          displayName: name.trim(),
+          photoURL: nextPhotoURL || null,
+        });
+      }
+
+      setSelectedPhotoAsset(null);
       onClose();
     } catch (err) {
-      console.error('Failed to update profile:', err);
-      Alert.alert('Erro', 'Não foi possível atualizar o perfil.');
+      const message = err instanceof Error ? err.message : 'N?o foi poss?vel atualizar o perfil.';
+      const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
+
+      console.error('Failed to update profile:', {
+        status,
+        message,
+        error: err,
+      });
+
+      Alert.alert('Erro', message);
     } finally {
       setIsSubmitting(false);
     }
@@ -114,6 +164,15 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
           >
             <Image source={{ uri: previewAvatarUrl }} style={styles.previewAvatarImage} />
           </View>
+          <TouchableOpacity
+            style={styles.uploadPhotoButton}
+            onPress={handleChoosePhoto}
+            disabled={isSubmitting}
+            activeOpacity={0.85}
+          >
+            <Camera size={16} color="#FFFFFF" />
+            <Text style={styles.uploadPhotoButtonText}>Escolher foto</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Avatar Presets */}
@@ -134,7 +193,10 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
                       borderWidth: isSelected ? 2.5 : 1,
                     },
                   ]}
-                  onPress={() => setPhoto(preset)}
+                  onPress={() => {
+                    setSelectedPhotoAsset(null);
+                    setPhoto(preset);
+                  }}
                   activeOpacity={0.8}
                 >
                   <Image source={{ uri: preset }} style={styles.presetImage} />
@@ -166,7 +228,10 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
             placeholder="https://sua-foto-url..."
             placeholderTextColor={isDarkMode ? '#64748B' : '#9CA3AF'}
             value={photo}
-            onChangeText={setPhoto}
+            onChangeText={(value) => {
+              setSelectedPhotoAsset(null);
+              setPhoto(value);
+            }}
             autoCapitalize="none"
           />
         </View>
@@ -588,6 +653,22 @@ const styles = StyleSheet.create({
   previewAvatarImage: {
     width: '100%',
     height: '100%',
+  },
+  uploadPhotoButton: {
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: '#6C5CE7',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  uploadPhotoButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   fieldSection: {
     marginBottom: 16,

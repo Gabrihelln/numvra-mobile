@@ -219,7 +219,18 @@ export const BudgetScreen: React.FC = () => {
             )}
           </View>
         </View>
-        <View style={styles.headerBackSpacer} />
+        <TouchableOpacity
+          onPress={() => {
+            setEditingCategory(null);
+            setIsNewCategoryOpen(true);
+          }}
+          style={[styles.headerActionButton, { backgroundColor: colors.primary }]}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Criar nova categoria"
+        >
+          <Plus size={20} color="#ffffff" strokeWidth={3} />
+        </TouchableOpacity>
       </View>
 
       {/* Conteúdo Rolável */}
@@ -428,26 +439,6 @@ export const BudgetScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Botão Tracejado: Criar Nova Categoria */}
-        <TouchableOpacity
-          onPress={() => {
-            setEditingCategory(null);
-            setIsNewCategoryOpen(true);
-          }}
-          style={[
-            styles.createCategoryDashedButton,
-            {
-              borderColor: '#6C5CE7',
-              backgroundColor: isDarkMode ? '#6C5CE715' : '#6C5CE708',
-            },
-          ]}
-          activeOpacity={0.8}
-        >
-          <View style={styles.plusIconCircle}>
-            <Plus size={20} color="#6C5CE7" strokeWidth={2.5} />
-          </View>
-          <Text style={styles.createCategoryText}>Criar Nova Categoria</Text>
-        </TouchableOpacity>
       </ScrollView>
 
       {/* Modal de Adicionar / Editar Categoria */}
@@ -495,6 +486,13 @@ const styles = StyleSheet.create({
   },
   headerBackSpacer: {
     width: 40,
+  },
+  headerActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     ...typography.h3,

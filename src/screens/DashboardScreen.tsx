@@ -30,6 +30,7 @@ import { pushNotificationService, type SystemNotification } from '../services/pu
 import { TransactionIcon } from '../components/common/TransactionIcon';
 import { BalanceSummaryCard } from '../components/common/BalanceSummaryCard';
 import { getGreetingForDate } from '../utils/greeting';
+import { formatBrazilianDate, toApiDate } from '../utils/dateFormat';
 import { RemoteIcon } from '../components/common/RemoteIcon';
 import {
   Bell,
@@ -130,82 +131,14 @@ const formatTransactionDateTime = (item: Transaction): string => {
 
       const hh = String(dateObj.getHours()).padStart(2, '0');
       const mm = String(dateObj.getMinutes()).padStart(2, '0');
-      const timeStr = `${hh}:${mm}`;
-
-      const now = new Date();
-      if (dateObj.toDateString() === now.toDateString()) {
-        return `Hoje, ${timeStr}`;
-      }
-
-      const yesterday = new Date();
-      yesterday.setDate(now.getDate() - 1);
-      if (dateObj.toDateString() === yesterday.toDateString()) {
-        return `Ontem, ${timeStr}`;
-      }
-
-      const day = dateObj.getDate();
-      const monthNames = [
-        'Jan',
-        'Fev',
-        'Mar',
-        'Abr',
-        'Mai',
-        'Jun',
-        'Jul',
-        'Ago',
-        'Set',
-        'Out',
-        'Nov',
-        'Dez',
-      ];
-      const month = monthNames[dateObj.getMonth()];
-      const year = dateObj.getFullYear();
-      return `${day} de ${month} de ${year}, ${timeStr}`;
+      return `${formatBrazilianDate(dateObj)}, ${hh}:${mm}`;
     } catch (e) {
       // fallback
     }
   }
 
-  if (item.date) {
-    try {
-      const [year, m, day] = item.date.split('-').map(Number);
-      const dateObj = new Date(year, m - 1, day);
-      const now = new Date();
-
-      if (dateObj.toDateString() === now.toDateString()) {
-        return 'Hoje';
-      }
-
-      const yesterday = new Date();
-      yesterday.setDate(now.getDate() - 1);
-      if (dateObj.toDateString() === yesterday.toDateString()) {
-        return 'Ontem';
-      }
-
-      const monthNames = [
-        'Jan',
-        'Fev',
-        'Mar',
-        'Abr',
-        'Mai',
-        'Jun',
-        'Jul',
-        'Ago',
-        'Set',
-        'Out',
-        'Nov',
-        'Dez',
-      ];
-      const displayMonth = monthNames[dateObj.getMonth()];
-      return `${day} de ${displayMonth} de ${year}`;
-    } catch (e) {
-      return item.date;
-    }
-  }
-
-  return 'Hoje';
+  return formatBrazilianDate(item.date, 'Hoje');
 };
-
 const formatDashboardAmount = (value: number, isVisible: boolean, options?: Intl.NumberFormatOptions) =>
   isVisible ? value.toLocaleString('pt-BR', options) : '••••••';
 const DASHBOARD_NOTIFICATIONS_LAST_SEEN_PREFIX = '@numvra:notifications:lastSeen:';
@@ -378,7 +311,7 @@ export const DashboardScreen: React.FC = () => {
         sub.nextBilling || `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
       const nextBillingDate = getNextBillingDate(currentBilling, sub.period || 'Mensal');
 
-      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const dateStr = toApiDate(now);
 
       await transactionService.addTransaction({
         title: `Pagamento: ${sub.name}`,
@@ -427,7 +360,7 @@ export const DashboardScreen: React.FC = () => {
     if (paidAmount <= 0) return;
 
     const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const dateStr = toApiDate(now);
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     // 1. Registrar transação de pagamento da fatura saindo da conta corrente
@@ -453,7 +386,7 @@ export const DashboardScreen: React.FC = () => {
       for (let i = 1; i <= installmentCount; i++) {
         const installmentDate = new Date();
         installmentDate.setMonth(installmentDate.getMonth() + i);
-        const instDateStr = `${installmentDate.getFullYear()}-${String(installmentDate.getMonth() + 1).padStart(2, '0')}-${String(installmentDate.getDate()).padStart(2, '0')}`;
+        const instDateStr = toApiDate(installmentDate);
 
         await transactionService.addTransaction({
           title: `Parcelamento Fatura: ${card.name} (${i}/${installmentCount})`,
@@ -681,7 +614,7 @@ export const DashboardScreen: React.FC = () => {
                 </View>
                 <Text style={[styles.upcomingBillsDetails, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
                   R$ {showBalance ? totalUpcomingAmount.toFixed(2).replace('.', ',') : '••••••'}{' '}
-                  {latestDueDate ? `| Vencimento: ${latestDueDate}` : ''}
+                  {latestDueDate ? `| Vencimento: ${formatBrazilianDate(latestDueDate)}` : ''}
                 </Text>
               </View>
 
@@ -919,7 +852,7 @@ export const DashboardScreen: React.FC = () => {
                         >
                           Próx. Pagamento:{' '}
                           <Text style={{ color: '#4f46e5', fontWeight: '800' }}>
-                            {item.nextBilling}
+                            {formatBrazilianDate(item.nextBilling)}
                           </Text>
                         </Text>
                       </View>

@@ -22,6 +22,12 @@ import { SubscriptionPlan } from '../types';
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type BillingPeriod = 'monthly' | 'semiannual' | 'annual';
 
+const getDisplayedBillingPrice = (plan: SubscriptionPlan, period: BillingPeriod) => {
+  if (period === 'semiannual') return plan.semiannualPrice * 6;
+  if (period === 'annual') return plan.annualPrice * 12;
+  return plan.monthlyPrice;
+};
+
 export const PlanScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
@@ -233,13 +239,11 @@ export const PlanScreen: React.FC = () => {
               const isSelected = selectedPlanId === plan.id;
               const isCurrent = activePlan === plan.id;
 
-              let displayPrice = plan.monthlyPrice;
-              let periodLabel = '/m\u00eas';
+              const displayPrice = getDisplayedBillingPrice(plan, selectedPeriod);
+              let periodLabel = '/mês';
               if (selectedPeriod === 'semiannual') {
-                displayPrice = plan.semiannualPrice;
                 periodLabel = '/semestre';
               } else if (selectedPeriod === 'annual') {
-                displayPrice = plan.annualPrice;
                 periodLabel = '/ano';
               }
 

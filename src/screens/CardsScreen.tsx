@@ -38,6 +38,7 @@ import { CreditCardType, Transaction } from '../types';
 import { PayCardBillModal, PayCardBillData } from '../components/modals/PayCardBillModal';
 import { AddEditCardModal } from '../components/modals/AddEditCardModal';
 import { spacing, borderRadius, typography } from '../theme';
+import { formatBrazilianDate } from '../utils/dateFormat';
 
 type LegacyCreditCardFields = CreditCardType & {
   limit?: number;
@@ -150,38 +151,52 @@ export const CardsScreen: React.FC = () => {
     }
 
     try {
-      // 1. Atualizar limite utilizado no cartão
-      await cardService.updateCard(data.card.id, {
-        usedLimit: data.remainingAmount,
-        isMonthPaid: data.remainingAmount === 0,
-      } as Partial<LegacyCreditCardFields>);
+            const paymentDate = new Date().toISOString().split('T')[0];
+      const cardLabel = `${data.card.name} (•••• ${data.card.finalDigits})`;
 
-      // 2. Registrar transação de pagamento de fatura
       await transactionService.addTransaction({
+        title: `Pagamento Fatura - ${data.card.name}`,
         description: `Pagamento Fatura - ${data.card.name}`,
         amount: -data.paidAmount,
         type: 'expense',
         category: 'Cartão de Crédito',
-        date: new Date().toISOString().split('T')[0],
+        date: paymentDate,
+        isCardCharge: false,
+        cardId: data.card.id,
+        cardName: cardLabel,
         status: 'completed',
       });
 
-      // 3. Se optou por parcelar o restante com juros
       if (data.isInstallmentRest && data.installmentCount && data.installmentValue) {
-        await transactionService.addTransaction({
-          description: `Parcelamento Fatura - ${data.card.name}`,
-          amount: -(data.installmentValue * data.installmentCount),
-          type: 'expense',
-          category: 'Cartão de Crédito',
-          date: new Date().toISOString().split('T')[0],
-          isCardCharge: true,
-          cardId: data.card.id,
-          installmentTotal: data.installmentCount,
-          installmentNumber: 1,
-          installmentAmount: data.installmentValue,
-          status: 'completed',
-        } as Omit<LegacyTransactionFields, 'id'>);
+        for (let index = 0; index < data.installmentCount; index++) {
+          const installmentDate = new Date();
+          installmentDate.setMonth(installmentDate.getMonth() + index + 1);
+
+          await transactionService.addTransaction({
+            title: `Parcelamento Fatura - ${data.card.name} (${index + 1}/${data.installmentCount})`,
+            description: `Parcelamento Fatura - ${data.card.name}`,
+            amount: -data.installmentValue,
+            type: 'expense',
+            category: 'Cartão de Crédito',
+            date: installmentDate.toISOString().split('T')[0],
+            isCardCharge: true,
+            cardId: data.card.id,
+            cardName: cardLabel,
+            installments: data.installmentCount,
+            currentInstallment: index + 1,
+            status: 'completed',
+          });
+        }
       }
+
+      const finalUsedLimit = data.isInstallmentRest && data.installmentCount && data.installmentValue
+        ? data.installmentCount * data.installmentValue
+        : data.remainingAmount;
+
+      await cardService.updateCard(data.card.id, {
+        usedLimit: finalUsedLimit,
+        isMonthPaid: finalUsedLimit === 0,
+      } as Partial<LegacyCreditCardFields>);
 
       Alert.alert('Sucesso', 'Pagamento de fatura processado com sucesso!');
     } catch (err: any) {
@@ -204,6 +219,7 @@ export const CardsScreen: React.FC = () => {
         brand: cardData.brand || 'mastercard',
         finalDigits: cardData.finalDigits || '1234',
         expirationDate: legacyCardData.expirationDate || '12/28',
+        expiration: legacyCardData.expirationDate || cardData.expiration || '12/28',
         bestDay: cardData.bestDay || 10,
         limit: legacyCardData.limit || 1000,
         totalLimit: cardData.totalLimit || 1000,
@@ -769,7 +785,7 @@ export const CardsScreen: React.FC = () => {
                     </Text>
                     <View style={styles.txSubRow}>
                       <Text style={[styles.txDate, { color: colors.textSecondary }]}>
-                        {tx.date}
+                        {formatBrazilianDate(tx.date)}
                       </Text>
                       {(tx as LegacyTransactionFields).installmentTotal && (tx as LegacyTransactionFields).installmentTotal! > 1 ? (
                         <View style={styles.installmentBadge}>

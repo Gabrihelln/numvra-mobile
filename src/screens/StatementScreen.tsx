@@ -12,12 +12,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { format } from 'date-fns';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Plus,
   Trash2,
   Search,
   X,
+  Calendar as CalendarIcon,
+  Pencil,
+  Check,
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -28,9 +32,11 @@ import { Transaction, Subscription, Goal } from '../types';
 import { TransactionIcon } from '../components/common/TransactionIcon';
 import { RemoteIcon } from '../components/common/RemoteIcon';
 import { BackButton } from '../components/common/BackButton';
+import { CalendarPicker, ModalBottomSheet } from '../components/common';
 import { getCategoryVisual } from '../constants/iconRegistry';
 import { useBudgets } from '../hooks/useBudgets';
 import { RootStackParamList } from '../navigation/types';
+import { formatBrazilianDate } from '../utils/dateFormat';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type StatementSection = 'transactions' | 'subscriptions' | 'goals';
@@ -78,6 +84,39 @@ const transactionMatchesSearch = (transaction: Transaction, query: string) => {
   return fields.some((field) => normalizeSearch(field).includes(normalizedQuery));
 };
 
+const formatAmountInput = (raw: string) => {
+  const cleanNumbers = raw.replace(/\D/g, '');
+  if (!cleanNumbers) return '0,00';
+
+  return (parseFloat(cleanNumbers) / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const getAmountFromRaw = (raw: string) => {
+  const cleanNumbers = raw.replace(/\D/g, '');
+  if (!cleanNumbers) return 0;
+  return parseFloat(cleanNumbers) / 100;
+};
+
+const getSubscriptionDate = (value?: string) => {
+  if (!value) return new Date();
+
+  const apiMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (apiMatch) {
+    return new Date(Number(apiMatch[1]), Number(apiMatch[2]) - 1, Number(apiMatch[3]));
+  }
+
+  const brazilianMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brazilianMatch) {
+    return new Date(Number(brazilianMatch[3]), Number(brazilianMatch[2]) - 1, Number(brazilianMatch[1]));
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 interface StatementScreenProps {
   section?: StatementSection;
 }
@@ -95,6 +134,11 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
   const [loading, setLoading] = useState(true);
   const [transactionSearch, setTransactionSearch] = useState('');
   const [transactionFilter, setTransactionFilter] = useState<TransactionFilter>('all');
+  const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
+  const [editSubscriptionAmountRaw, setEditSubscriptionAmountRaw] = useState('');
+  const [editSubscriptionDate, setEditSubscriptionDate] = useState(new Date());
+  const [isEditSubscriptionCalendarOpen, setIsEditSubscriptionCalendarOpen] = useState(false);
+  const [isSavingSubscription, setIsSavingSubscription] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -173,6 +217,44 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
       return;
     }
     navigation.navigate('AddSubscriptionModal');
+  };
+
+  const handleEditSubscription = (sub: Subscription) => {
+    setEditingSubscription(sub);
+    setEditSubscriptionAmountRaw(String(Math.round((sub.amount || 0) * 100)));
+    setEditSubscriptionDate(getSubscriptionDate(sub.nextBilling || sub.renewalDate));
+  };
+
+  const handleCloseEditSubscription = () => {
+    if (isSavingSubscription) return;
+    setEditingSubscription(null);
+    setIsEditSubscriptionCalendarOpen(false);
+  };
+
+  const handleSaveEditedSubscription = async () => {
+    if (!editingSubscription) return;
+
+    const amount = getAmountFromRaw(editSubscriptionAmountRaw);
+    if (amount <= 0) {
+      Alert.alert('Valor inválido', 'Informe um valor maior que zero para a assinatura.');
+      return;
+    }
+
+    setIsSavingSubscription(true);
+    try {
+      const nextBilling = format(editSubscriptionDate, 'yyyy-MM-dd');
+      await subscriptionService.updateSubscription(editingSubscription.id, {
+        amount,
+        nextBilling,
+        renewalDate: nextBilling,
+      });
+      setEditingSubscription(null);
+      setIsEditSubscriptionCalendarOpen(false);
+    } catch (err: any) {
+      Alert.alert('Erro ao salvar', err?.message || 'Não foi possível atualizar a assinatura.');
+    } finally {
+      setIsSavingSubscription(false);
+    }
   };
 
   const handleCreateGoal = () => {
@@ -372,7 +454,7 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
                           { color: isDarkMode ? '#94A3B8' : '#6B7280' },
                         ]}
                       >
-                        {item.date || 'Hoje'} • {item.category}
+                        {formatBrazilianDate(item.date, 'Hoje')} • {item.category}
                       </Text>
                     </View>
                   </View>
@@ -462,16 +544,30 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
                           { color: isDarkMode ? '#94A3B8' : '#64748B' },
                         ]}
                       >
-                        Cobrança: {sub.nextBilling || '15/05'}
+                        Cobrança: {formatBrazilianDate(sub.nextBilling, '15/05/' + new Date().getFullYear())}
                       </Text>
                     </View>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteSubscription(sub)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Trash2 size={18} color={isDarkMode ? '#64748B' : '#9CA3AF'} />
-                  </TouchableOpacity>
+                  <View style={styles.subActions}>
+                    <TouchableOpacity
+                      onPress={() => handleEditSubscription(sub)}
+                      style={styles.subIconButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Editar assinatura"
+                    >
+                      <Pencil size={17} color={isDarkMode ? '#CBD5E1' : '#64748B'} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteSubscription(sub)}
+                      style={styles.subIconButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Excluir assinatura"
+                    >
+                      <Trash2 size={18} color={isDarkMode ? '#64748B' : '#9CA3AF'} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.subFooter}>
@@ -573,7 +669,7 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
                   <View style={styles.goalFooter}>
                     <Text style={styles.progressPercent}>{progress}% completo</Text>
                     {!!goal.estimatedDate && (
-                      <Text style={styles.goalDate}>{goal.estimatedDate}</Text>
+                      <Text style={styles.goalDate}>{formatBrazilianDate(goal.estimatedDate)}</Text>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -589,6 +685,69 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
           </View>
         )}
       </ScrollView>
+
+      <ModalBottomSheet
+        isOpen={!!editingSubscription}
+        onClose={handleCloseEditSubscription}
+        title="Editar Assinatura"
+        maxHeight="72%"
+      >
+        <View style={styles.editSubscriptionContent}>
+          <View style={styles.editField}>
+            <Text style={[styles.editLabel, { color: colors.textMuted }]}>VALOR</Text>
+            <View style={[styles.editAmountBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.editCurrency, { color: colors.primary }]}>R$</Text>
+              <TextInput
+                value={formatAmountInput(editSubscriptionAmountRaw)}
+                onChangeText={(value) => setEditSubscriptionAmountRaw(value.replace(/\D/g, ''))}
+                keyboardType="numeric"
+                placeholder="0,00"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.editAmountInput, { color: colors.text }]}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => setIsEditSubscriptionCalendarOpen(true)}
+            style={[styles.editDateButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            activeOpacity={0.8}
+          >
+            <View style={styles.editDateLeft}>
+              <CalendarIcon size={20} color={colors.primary} />
+              <View>
+                <Text style={[styles.editLabel, { color: colors.textMuted }]}>DATA DE VENCIMENTO</Text>
+                <Text style={[styles.editDateText, { color: colors.text }]}>
+                  {formatBrazilianDate(editSubscriptionDate)}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleSaveEditedSubscription}
+            disabled={isSavingSubscription}
+            style={[styles.editSaveButton, { backgroundColor: colors.primary, opacity: isSavingSubscription ? 0.7 : 1 }]}
+            activeOpacity={0.85}
+          >
+            {isSavingSubscription ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <Check size={20} color="#ffffff" strokeWidth={3} />
+                <Text style={styles.editSaveButtonText}>Salvar Alterações</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ModalBottomSheet>
+
+      <CalendarPicker
+        isOpen={isEditSubscriptionCalendarOpen}
+        onClose={() => setIsEditSubscriptionCalendarOpen(false)}
+        selectedDate={editSubscriptionDate}
+        onSelect={setEditSubscriptionDate}
+      />
     </View>
   );
 };
@@ -762,6 +921,18 @@ const styles = StyleSheet.create({
   subTitleRow: {
     flex: 1,
   },
+  subActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  subIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   subName: {
     fontSize: 16,
     fontWeight: '700',
@@ -810,6 +981,67 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#6C5CE7',
+  },
+  editSubscriptionContent: {
+    gap: 16,
+    paddingBottom: 8,
+  },
+  editField: {
+    gap: 8,
+  },
+  editLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  editAmountBox: {
+    minHeight: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editCurrency: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  editAmountInput: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '900',
+    paddingVertical: 0,
+  },
+  editDateButton: {
+    minHeight: 64,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  editDateLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  editDateText: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  editSaveButton: {
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  editSaveButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
   },
   goalCard: {
     padding: 16,

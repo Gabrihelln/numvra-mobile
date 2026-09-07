@@ -62,14 +62,52 @@ service cloud.firestore {
     }
 
     // 4. Transaction Blueprint
+    function hasOnlyValidTransactionFields(data) {
+      return data.keys().hasOnly([
+        'userId',
+        'title',
+        'description',
+        'amount',
+        'date',
+        'category',
+        'categoryColor',
+        'type',
+        'icon',
+        'status',
+        'isCardCharge',
+        'cardId',
+        'cardName',
+        'paymentMethod',
+        'installments',
+        'currentInstallment',
+        'isRecurring',
+        'createdMs',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
     function isValidTransaction(data) {
       return data.keys().hasAll(['userId', 'title', 'amount', 'date', 'type']) &&
-             data.keys().size() <= 15 &&
+             hasOnlyValidTransactionFields(data) &&
              data.userId == request.auth.uid &&
              data.title is string && data.title.size() <= 100 &&
              data.amount is number &&
              data.date is string &&
-             data.type in ['income', 'expense'];
+             data.type in ['income', 'expense'] &&
+             (!('description' in data) || data.description is string) &&
+             (!('category' in data) || data.category is string) &&
+             (!('categoryColor' in data) || data.categoryColor is string) &&
+             (!('icon' in data) || data.icon is string) &&
+             (!('status' in data) || data.status in ['completed', 'pending', 'paid', 'canceled']) &&
+             (!('isCardCharge' in data) || data.isCardCharge is bool) &&
+             (!('cardId' in data) || data.cardId is string) &&
+             (!('cardName' in data) || data.cardName is string) &&
+             (!('paymentMethod' in data) || data.paymentMethod is string) &&
+             (!('installments' in data) || data.installments is number) &&
+             (!('currentInstallment' in data) || data.currentInstallment is number) &&
+             (!('isRecurring' in data) || data.isRecurring is bool) &&
+             (!('createdMs' in data) || data.createdMs is number);
     }
 
     match /transactions/{transactionId} {
@@ -82,33 +120,104 @@ service cloud.firestore {
     }
 
     // Credit Cards Blueprint
+    function hasOnlyValidCardFields(data) {
+      return data.keys().hasOnly([
+        'userId',
+        'name',
+        'cardName',
+        'brand',
+        'finalDigits',
+        'lastFourDigits',
+        'expiration',
+        'expirationDate',
+        'bestDay',
+        'closingDay',
+        'dueDay',
+        'dueDate',
+        'totalLimit',
+        'creditLimit',
+        'limit',
+        'usedLimit',
+        'lastPaidMonth',
+        'isMonthPaid',
+        'isVirtual',
+        'isBlocked',
+        'colorClass',
+        'color',
+        'theme',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
     function isValidCard(data) {
-      return data.keys().hasAll(['userId', 'name', 'brand', 'finalDigits', 'expiration', 'bestDay', 'totalLimit']) &&
-             data.keys().size() <= 15 &&
+      return data.keys().hasAll(['userId', 'brand']) &&
+             (('name' in data && data.name is string && data.name.size() <= 100) ||
+              ('cardName' in data && data.cardName is string && data.cardName.size() <= 100)) &&
+             (('finalDigits' in data && data.finalDigits is string && data.finalDigits.size() <= 4) ||
+              ('lastFourDigits' in data && data.lastFourDigits is string && data.lastFourDigits.size() <= 4)) &&
+             (('expiration' in data && data.expiration is string && data.expiration.size() <= 10) ||
+              ('expirationDate' in data && data.expirationDate is string && data.expirationDate.size() <= 10)) &&
+             (('bestDay' in data && (data.bestDay is string || data.bestDay is number)) ||
+              ('closingDay' in data && data.closingDay is number) ||
+              ('dueDay' in data && data.dueDay is number) ||
+              ('dueDate' in data && data.dueDate is string)) &&
+             (('totalLimit' in data && data.totalLimit is number) ||
+              ('creditLimit' in data && data.creditLimit is number) ||
+              ('limit' in data && data.limit is number)) &&
+             hasOnlyValidCardFields(data) &&
              data.userId == request.auth.uid &&
-             data.name is string && data.name.size() <= 100 &&
-             data.brand is string &&
-             data.finalDigits is string &&
-             data.totalLimit is number;
+             data.brand is string && data.brand.size() <= 50 &&
+             (!('usedLimit' in data) || data.usedLimit is number) &&
+             (!('lastPaidMonth' in data) || data.lastPaidMonth is string) &&
+             (!('isMonthPaid' in data) || data.isMonthPaid is bool);
     }
 
     match /cards/{cardId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn() && isValidCard(incoming());
-      allow update: if isSignedIn() && isValidCard(incoming()) && 
-                    incoming().userId == existing().userId;
+      allow update: if isSignedIn() && existing().userId == request.auth.uid &&
+                    incoming().userId == existing().userId &&
+                    isValidCard(incoming());
       allow delete: if isSignedIn() && resource != null && resource.data.userId == request.auth.uid;
     }
 
     // 5. Subscription Blueprint
+    function hasOnlyValidSubscriptionFields(data) {
+      return data.keys().hasOnly([
+        'userId',
+        'name',
+        'amount',
+        'period',
+        'billingCycle',
+        'nextBilling',
+        'renewalDate',
+        'icon',
+        'iconUrl',
+        'color',
+        'category',
+        'status',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
     function isValidSubscription(data) {
       return data.keys().hasAll(['userId', 'name', 'amount', 'period', 'nextBilling']) &&
-             data.keys().size() <= 10 &&
+             hasOnlyValidSubscriptionFields(data) &&
              data.userId == request.auth.uid &&
              data.name is string && data.name.size() <= 100 &&
              data.amount is number &&
-             data.period in ['Mensal', 'Trimestral', 'Semestral', 'Anual'];
+             data.period in ['Mensal', 'Trimestral', 'Semestral', 'Anual'] &&
+             (!('billingCycle' in data) || data.billingCycle in ['monthly', 'quarterly', 'semiannual', 'annual']) &&
+             data.nextBilling is string &&
+             (!('renewalDate' in data) || data.renewalDate is string) &&
+             (!('icon' in data) || data.icon is string) &&
+             (!('iconUrl' in data) || data.iconUrl is string) &&
+             (!('color' in data) || data.color is string) &&
+             (!('category' in data) || data.category is string) &&
+             (!('status' in data) || data.status in ['active', 'canceled', 'paused']);
     }
 
     match /subscriptions/{subscriptionId} {

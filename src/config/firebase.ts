@@ -9,7 +9,6 @@ const firebaseConfig = {
   apiKey: Config.FIREBASE_API_KEY || "AIzaSyBlwEGeh5rrTjc66U2-9aiiYU0BFUx50y0",
   authDomain: Config.FIREBASE_AUTH_DOMAIN || "numvra-main.firebaseapp.com",
   projectId: Config.FIREBASE_PROJECT_ID || "numvra-main",
-  storageBucket: Config.FIREBASE_STORAGE_BUCKET || "numvra-main.firebasestorage.app",
   messagingSenderId: Config.FIREBASE_MESSAGING_SENDER_ID || "999637138962",
   appId: Config.FIREBASE_APP_ID || "1:999637138962:web:234cb1b5a215a5420ba2cb"
 };

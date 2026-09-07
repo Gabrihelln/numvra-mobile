@@ -1,21 +1,39 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
   getDoc,
-  query, 
-  where, 
+  query,
+  where,
   onSnapshot,
   serverTimestamp,
-  getDocs
+  getDocs,
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { CreditCardType } from '../types';
 
+type CardWriteData = Partial<CreditCardType> & {
+  expirationDate?: string;
+  limit?: number;
+  isMonthPaid?: boolean;
+};
+
 const COLLECTION_NAME = 'cards';
+
+const normalizeCardWriteData = (card: CardWriteData): CardWriteData => {
+  const expiration = card.expiration || card.expirationDate || '12/28';
+  const totalLimit = card.totalLimit ?? card.creditLimit ?? card.limit ?? 0;
+
+  return {
+    ...card,
+    expiration,
+    expirationDate: card.expirationDate || expiration,
+    totalLimit,
+  };
+};
 
 export const cardService = {
   subscribeToCards: (callback: (cards: CreditCardType[]) => void) => {
@@ -65,12 +83,12 @@ export const cardService = {
     }
   },
 
-  addCard: async (card: Omit<CreditCardType, 'id'>) => {
+  addCard: async (card: Omit<CreditCardType, 'id'> & CardWriteData) => {
     if (!auth.currentUser) throw new Error('Usuário não autenticado');
 
     try {
       const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-        ...card,
+        ...normalizeCardWriteData(card),
         userId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
       });
@@ -80,11 +98,19 @@ export const cardService = {
     }
   },
 
-  updateCard: async (id: string, card: Partial<CreditCardType>) => {
+  updateCard: async (id: string, card: Partial<CreditCardType> & CardWriteData) => {
+    if (!auth.currentUser) throw new Error('Usuário não autenticado');
+
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists() || docSnap.data().userId !== auth.currentUser.uid) {
+        throw new Error('Cartão não encontrado.');
+      }
+
       await updateDoc(docRef, {
-        ...card,
+        ...normalizeCardWriteData({ ...docSnap.data(), ...card }),
+        userId: auth.currentUser.uid,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -100,6 +126,7 @@ export const cardService = {
         const currentLimit = docSnap.data().usedLimit || 0;
         const newUsedLimit = Math.max(0, Number((currentLimit + amountOffset).toFixed(2)));
         await updateDoc(docRef, {
+          ...normalizeCardWriteData(docSnap.data()),
           usedLimit: newUsedLimit,
           updatedAt: serverTimestamp()
         });

@@ -12,6 +12,7 @@ import { Subscription, CreditCardType } from '../../types';
 import { X, AlertCircle, CreditCard, Sparkles, CheckCircle2 } from 'lucide-react-native';
 import { RemoteIcon } from '../common/RemoteIcon';
 import { SwipeableBottomSheet } from '../common/SwipeableBottomSheet';
+import { formatBrazilianDate } from '../../utils/dateFormat';
 
 interface UpcomingBillsModalProps {
   isOpen: boolean;
@@ -102,7 +103,7 @@ export const UpcomingBillsModal: React.FC<UpcomingBillsModalProps> = ({
                           Fatura {card.name} (•••• {card.finalDigits})
                         </Text>
                         <Text style={[styles.billDate, { color: isDarkMode ? '#a1a1aa' : '#64748b' }]}>
-                          Vencimento: {card.dueDate || `${card.bestDay || 10}/${String(new Date().getMonth() + 1).padStart(2, '0')}`}
+                          Vencimento: {formatBrazilianDate(card.dueDate || `${card.bestDay || 10}/${String(new Date().getMonth() + 1).padStart(2, '0')}`)}
                         </Text>
                         <Text style={styles.billAmount}>
                           R$ {(card.usedLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -166,7 +167,7 @@ export const UpcomingBillsModal: React.FC<UpcomingBillsModalProps> = ({
                             {sub.name}
                           </Text>
                           <Text style={[styles.billDate, { color: isDarkMode ? '#a1a1aa' : '#64748b' }]}>
-                            Próx: {sub.nextBilling}
+                            Próx: {formatBrazilianDate(sub.nextBilling)}
                           </Text>
                           <Text style={styles.billAmount}>
                             R$ {sub.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

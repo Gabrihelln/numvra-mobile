@@ -13,8 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { format, isToday } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format } from 'date-fns';
 import { X, Calendar as CalendarIcon, ChevronRight, Check, Search } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,6 +24,7 @@ import { spacing, borderRadius, typography } from '../theme';
 import { SubscriptionTemplate } from '../types';
 import { getCategoryVisual } from '../constants/iconRegistry';
 import { RemoteIcon } from '../components/common/RemoteIcon';
+import { formatBrazilianDate } from '../utils/dateFormat';
 
 interface StreamingService {
   id: string;
@@ -103,8 +103,7 @@ export const AddSubscriptionScreen: React.FC = () => {
   }, [serviceSearch, services]);
 
   const formatDate = (date: Date) => {
-    if (isToday(date)) return `Hoje, ${format(date, "d 'de' MMMM", { locale: ptBR })}`;
-    return format(date, "EEEE, d 'de' MMMM", { locale: ptBR });
+    return formatBrazilianDate(date);
   };
 
   const formatDisplayAmount = (raw: string) => {

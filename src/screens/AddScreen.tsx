@@ -11,8 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { format, isToday } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format } from 'date-fns';
 import { X, Calendar as CalendarIcon, ChevronRight, Check, Banknote, CreditCard, Layers } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,6 +23,7 @@ import { spacing, borderRadius, typography } from '../theme';
 import { CreditCardType } from '../types';
 import { useBudgets } from '../hooks/useBudgets';
 import { getCategoryVisual } from '../constants/iconRegistry';
+import { formatBrazilianDate } from '../utils/dateFormat';
 
 const LEGACY_INCOME_CATEGORIES = [
   { id: 'legacy-salary', label: 'Salário', icon: 'banknote', color: '#10b981' },
@@ -76,10 +76,7 @@ export const AddScreen: React.FC = () => {
       : [];
 
   const formatDate = (date: Date) => {
-    if (isToday(date)) {
-      return `Hoje, ${format(date, "d 'de' MMMM", { locale: ptBR })}`;
-    }
-    return format(date, "EEEE, d 'de' MMMM", { locale: ptBR });
+    return formatBrazilianDate(date);
   };
 
   // Format integer cents into BRL display e.g. "12,50"
@@ -132,22 +129,33 @@ export const AddScreen: React.FC = () => {
     setLoading(true);
     try {
       if (user) {
-        await transactionService.addTransaction({
-          title: desc,
-          description: desc,
-          amount: type === 'expense' ? -numericAmount : numericAmount,
-          date: format(selectedDate, 'yyyy-MM-dd'),
-          category: selectedCategory,
-          type: type,
-          isCardCharge: isCard,
-          ...(isCard && selectedCard ? {
-            cardId: selectedCard.id,
-            cardName: `${selectedCard.name} (•••• ${selectedCard.finalDigits})`,
-            installments,
-            currentInstallment: 1,
-          } : {}),
-          status: 'completed',
-        });
+        const totalInstallments = isCard ? installments : 1;
+        const baseAmount = type === 'expense' ? -numericAmount : numericAmount;
+        const amountPerInstallment = isCard && totalInstallments > 1 ? -(numericAmount / totalInstallments) : baseAmount;
+
+        for (let index = 0; index < totalInstallments; index++) {
+          const installmentDate = new Date(selectedDate);
+          if (isCard && totalInstallments > 1) {
+            installmentDate.setMonth(selectedDate.getMonth() + index);
+          }
+
+          await transactionService.addTransaction({
+            title: isCard && totalInstallments > 1 ? `${desc} (${index + 1}/${totalInstallments})` : desc,
+            description: desc,
+            amount: amountPerInstallment,
+            date: format(installmentDate, 'yyyy-MM-dd'),
+            category: selectedCategory,
+            type: type,
+            isCardCharge: isCard,
+            ...(isCard && selectedCard ? {
+              cardId: selectedCard.id,
+              cardName: `${selectedCard.name} (???? ${selectedCard.finalDigits})`,
+              installments: totalInstallments,
+              currentInstallment: index + 1,
+            } : {}),
+            status: 'completed',
+          });
+        }
       }
       navigation.goBack();
     } catch (error: any) {
@@ -539,10 +547,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     paddingTop: spacing.sm,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 18,
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
     overflow: 'hidden',
   },
   handle: {

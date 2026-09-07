@@ -48,7 +48,7 @@ export const PayCardBillModal: React.FC<PayCardBillModalProps> = ({
   const [paymentType, setPaymentType] = useState<'total' | 'partial'>('total');
   const [paidAmountInput, setPaidAmountInput] = useState<string>('');
   const [isInstallmentRest, setIsInstallmentRest] = useState<boolean>(false);
-  const [installmentCount, setInstallmentCount] = useState<number>(2);
+  const [installmentCount, setInstallmentCount] = useState<number>(1);
   const [installmentValueInput, setInstallmentValueInput] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export const PayCardBillModal: React.FC<PayCardBillModalProps> = ({
       setPaymentType('total');
       setPaidAmountInput('');
       setIsInstallmentRest(false);
-      setInstallmentCount(2);
+      setInstallmentCount(1);
       setInstallmentValueInput('');
       setErrorMessage(null);
       setLoading(false);
@@ -372,7 +372,7 @@ export const PayCardBillModal: React.FC<PayCardBillModalProps> = ({
                                     <TouchableOpacity
                                       onPress={() =>
                                         setInstallmentCount((prev) =>
-                                          Math.max(2, prev - 1)
+                                          Math.max(1, prev - 1)
                                         )
                                       }
                                       style={styles.stepBtn}

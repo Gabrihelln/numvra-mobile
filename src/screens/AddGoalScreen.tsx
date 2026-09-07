@@ -3,12 +3,12 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, Touc
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Calendar, Check, X } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { goalService } from '../services/goalService';
 import { CalendarPicker } from '../components/common/CalendarPicker';
+import { formatBrazilianDate } from '../utils/dateFormat';
 
 const formatAmount = (raw: string) => {
   const digits = raw.replace(/\D/g, '');
@@ -46,7 +46,7 @@ export const AddGoalScreen: React.FC = () => {
         subtitle: subtitle.trim() || 'Meta Financeira',
         currentAmount: Number(currentRaw || '0') / 100,
         targetAmount,
-        estimatedDate: format(date, "MMM yyyy", { locale: ptBR }),
+        estimatedDate: format(date, 'yyyy-MM-dd'),
         icon: '🎯',
       });
       navigation.goBack();
@@ -76,7 +76,7 @@ export const AddGoalScreen: React.FC = () => {
           <View style={styles.amountField}><Text style={[styles.label, { color: colors.text }]}>Preciso de</Text><TextInput value={formatAmount(targetRaw)} onChangeText={(value) => setTargetRaw(value.replace(/\D/g, ''))} keyboardType="numeric" style={[styles.input, styles.amountInput, { color: colors.primary, backgroundColor: colors.surface }]} /></View>
         </View>
         <TouchableOpacity onPress={() => setCalendarOpen(true)} style={[styles.dateButton, { backgroundColor: colors.surface }]}>
-          <Calendar size={20} color={colors.primary} /><View><Text style={[styles.dateLabel, { color: colors.textMuted }]}>QUANDO DESEJA ALCANÇAR?</Text><Text style={[styles.dateValue, { color: colors.text }]}>{format(date, "MMMM 'de' yyyy", { locale: ptBR })}</Text></View>
+          <Calendar size={20} color={colors.primary} /><View><Text style={[styles.dateLabel, { color: colors.textMuted }]}>QUANDO DESEJA ALCANÇAR?</Text><Text style={[styles.dateValue, { color: colors.text }]}>{formatBrazilianDate(date)}</Text></View>
         </TouchableOpacity>
         <TouchableOpacity onPress={save} disabled={saving} style={[styles.save, { backgroundColor: colors.primary }]}>
           {saving ? <ActivityIndicator color="#fff" /> : <><Check size={20} color="#fff" /><Text style={styles.saveText}>Criar Meta Estratégica</Text></>}

@@ -35,6 +35,7 @@ import { RootStackParamList } from '../navigation/types';
 import { AddFundsModal } from '../components/modals/AddFundsModal';
 import { NotificationsModal } from '../components/modals/NotificationsModal';
 import { CurvedHeader, LoadingState, ModalBottomSheet } from '../components/common';
+import { formatBrazilianDate } from '../utils/dateFormat';
 
 type GoalDetailRouteProp = RouteProp<RootStackParamList, 'GoalDetail'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -456,7 +457,7 @@ export const GoalDetailScreen: React.FC = () => {
                   PREVISÃO
                 </Text>
                 <Text style={[styles.forecastValue, { color: colors.text }]} numberOfLines={1}>
-                  {goal.estimatedDate || 'Sem Estimativa'}
+                  {formatBrazilianDate(goal.estimatedDate, 'Sem Estimativa')}
                 </Text>
               </View>
             </View>
