@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(9, 9, 11, 0.45)',
+    backgroundColor: 'transparent',
   },
   bottomSheet: {
     marginTop: 'auto',
@@ -546,11 +546,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderBottomWidth: 0,
     paddingTop: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 2,
     overflow: 'hidden',
   },
   handle: {

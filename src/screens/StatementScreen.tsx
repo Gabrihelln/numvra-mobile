@@ -363,7 +363,10 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
 
       {/* Content */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          section === 'goals' && { paddingBottom: Math.max(insets.bottom, 12) + 118 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (

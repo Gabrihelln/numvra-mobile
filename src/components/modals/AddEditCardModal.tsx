@@ -36,6 +36,7 @@ const BRAND_OPTIONS = [
   { label: 'Elo', value: 'elo' },
   { label: 'Amex', value: 'amex' },
   { label: 'Hipercard', value: 'hipercard' },
+  { label: 'Outros', value: 'other' },
 ];
 
 const COLOR_THEMES = [
@@ -382,7 +383,7 @@ export const AddEditCardModal: React.FC<AddEditCardModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
   keyboardAvoidingView: {

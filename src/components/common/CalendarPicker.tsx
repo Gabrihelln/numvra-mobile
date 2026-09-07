@@ -176,7 +176,7 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
@@ -187,11 +187,6 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     borderWidth: 1,
     padding: spacing.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
   },
   header: {
     flexDirection: 'row',

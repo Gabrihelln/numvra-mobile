@@ -14,9 +14,6 @@ import { useNavigation } from '@react-navigation/native';
 import {
   CreditCard,
   Plus,
-  Eye,
-  EyeOff,
-  TrendingDown,
   ChevronRight,
   Sparkles,
   ShoppingBag,
@@ -27,7 +24,6 @@ import {
   Globe,
   Trash2,
   Edit2,
-  Wifi,
   Lock,
 } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
@@ -68,7 +64,7 @@ export const CardsScreen: React.FC = () => {
   const [cards, setCards] = useState<CreditCardType[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedCardIndex, setSelectedCardIndex] = useState(0);
-  const [showValues, setShowValues] = useState(true);
+  const showValues = true;
   const [loading, setLoading] = useState(true);
 
   // Modais
@@ -120,29 +116,51 @@ export const CardsScreen: React.FC = () => {
     [transactions, activeCard?.id]
   );
 
-  const cardChargeTotal = useMemo(
-    () =>
-      cardTransactions.reduce((total, tx) => {
-        if (tx.type !== 'expense') return total;
-        return total + Math.abs(toFiniteNumber(tx.amount));
-      }, 0),
-    [cardTransactions]
-  );
-
-  // Lógica de cálculo de fatura e limites
-  const rawUsedLimit = activeCard?.usedLimit;
-  const usedLimit = Math.max(0, toFiniteNumber(rawUsedLimit ?? cardChargeTotal));
-  const totalLimit = Math.max(
-    0,
-    toFiniteNumber(activeCard?.totalLimit ?? activeCard?.creditLimit ?? activeCard?.limit)
-  );
-  const availableLimit = Math.max(0, totalLimit - usedLimit);
-  const limitUsedPercent = totalLimit > 0
-    ? Math.min(Math.max((usedLimit / totalLimit) * 100, 0), 100)
-    : 0;
-  const limitUsedPercentLabel = Math.round(limitUsedPercent);
-  const isMonthPaid = activeCard?.isMonthPaid || false;
   const latestCardTransactions = cardTransactions.slice(0, 10);
+
+  const formatCurrency = (value: number) =>
+    `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+  const hiddenCurrency = 'R$ ******';
+
+  const getCardDayLabel = (value: unknown) => {
+    const rawValue = String(value || '').trim();
+    if (!rawValue) return '10';
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(rawValue)) {
+      return rawValue.slice(8, 10).replace(/^0/, '') || rawValue;
+    }
+
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(rawValue)) {
+      return rawValue.slice(0, 2).replace(/^0/, '') || rawValue;
+    }
+
+    return rawValue.replace(/^0+(?=\d)/, '');
+  };
+
+  const getCardFinancials = (card: LegacyCreditCardFields) => {
+    const cardTotalLimit = Math.max(
+      0,
+      toFiniteNumber(card.totalLimit ?? card.creditLimit ?? card.limit)
+    );
+    const cardTransactionTotal = transactions.reduce((total, tx) => {
+      if (tx.type !== 'expense' || tx.cardId !== card.id) return total;
+      return total + Math.abs(toFiniteNumber(tx.amount));
+    }, 0);
+    const cardUsedLimit = Math.max(0, toFiniteNumber(card.usedLimit ?? cardTransactionTotal));
+
+    return {
+      totalLimit: cardTotalLimit,
+      usedLimit: cardUsedLimit,
+      availableLimit: Math.max(0, cardTotalLimit - cardUsedLimit),
+      isMonthPaid: card.isMonthPaid || false,
+    };
+  };
+
+  const activeCardFinancials = activeCard ? getCardFinancials(activeCard) : null;
+  const activeLimitUsedPercent = activeCardFinancials && activeCardFinancials.totalLimit > 0
+    ? Math.min(Math.max((activeCardFinancials.usedLimit / activeCardFinancials.totalLimit) * 100, 0), 100)
+    : 0;
   // Handlers de Ações
   const handlePayBillConfirm = async (data: PayCardBillData) => {
     if (!cardAccess.allowed) {
@@ -349,9 +367,13 @@ export const CardsScreen: React.FC = () => {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Carrossel de Cartões Físicos / Virtuais */}
+        {/* Resumo e lista de cartoes */}
         {cards.length > 0 ? (
-          <View style={styles.cardsCarouselSection}>
+          <View style={styles.cardsOverviewSection}>
+            <Text style={[styles.cardsSectionTitle, { color: colors.text }]}>
+              Meus cartões
+            </Text>
+
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -370,6 +392,9 @@ export const CardsScreen: React.FC = () => {
               {cards.map((card, idx) => {
                 const isSelected = selectedCardIndex === idx;
                 const cardBg = getCardBgColor(card.brand, idx);
+                const financials = getCardFinancials(card as LegacyCreditCardFields);
+                const dueDay = getCardDayLabel(card.dueDay ?? card.dueDate ?? card.bestDay);
+                const bestPurchaseDay = getCardDayLabel(card.bestDay);
 
                 return (
                   <TouchableOpacity
@@ -381,55 +406,51 @@ export const CardsScreen: React.FC = () => {
                       {
                         backgroundColor: cardBg,
                         width: CARD_WIDTH,
+                        borderColor: isSelected ? 'rgba(255, 255, 255, 0.55)' : 'rgba(255, 255, 255, 0.18)',
                       },
                     ]}
                   >
-                    {/* Top Row: Tag e NFC */}
                     <View style={styles.cardVisualTop}>
-                      <View style={styles.cardSelectedTag}>
-                        <Text style={styles.cardSelectedTagText}>
-                          {isSelected ? 'CARTÃO SELECIONADO' : 'CLIQUE PARA SELECIONAR'}
-                        </Text>
-                      </View>
-                      <Wifi size={20} color="rgba(255,255,255,0.7)" />
-                    </View>
+                      <Text style={styles.cardHolderName} numberOfLines={1}>{card.name}</Text>
 
-                    {/* Chip Metálico */}
-                    <View style={styles.chipVisual}>
-                      <View style={styles.chipInnerGrid} />
-                    </View>
-
-                    {/* Número mascarado */}
-                    <Text style={styles.cardDigitsText}>
-                      ••••  ••••  ••••  {card.finalDigits || '1234'}
-                    </Text>
-
-                    {/* Bottom Row: Nome, Validade e Bandeira */}
-                    <View style={styles.cardVisualBottom}>
-                      <View>
-                        <Text style={styles.cardHolderName}>{card.name}</Text>
-                        <View style={styles.cardDatesRow}>
-                          <Text style={styles.cardDateInfo}>
-                            EXP: {(card as LegacyCreditCardFields).expirationDate || '12/28'}
-                          </Text>
-                          <Text style={styles.cardDateInfo}>
-                            MELHOR DIA: {card.bestDay || '10'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Brand Tag / Logo */}
                       <View style={styles.brandBadgeWrapper}>
                         {card.brand === 'mastercard' ? (
                           <View style={styles.mastercardCircles}>
                             <View style={[styles.mcCircle, { backgroundColor: '#eb001b' }]} />
                             <View style={[styles.mcCircle, { backgroundColor: '#f79e1b', marginLeft: -10 }]} />
                           </View>
-                        ) : (
+                        ) : card.brand && card.brand !== 'other' ? (
                           <Text style={styles.brandGenericText}>
-                            {(card.brand || 'CARD').toUpperCase()}
+                            {card.brand.toUpperCase()}
                           </Text>
+                        ) : (
+                          <CreditCard size={24} color="#ffffff" />
                         )}
+                      </View>
+                    </View>
+
+                    <View style={styles.cardVisualMain}>
+                      <Text style={styles.cardDigitsText}>
+                        •••• •••• •••• {card.finalDigits || '1234'}
+                      </Text>
+
+                      <View>
+                        <Text style={styles.cardInfoLabel}>Limite total</Text>
+                        <Text style={styles.cardLimitAmount}>
+                          {showValues ? formatCurrency(financials.totalLimit) : hiddenCurrency}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardVisualBottom}>
+                      <View style={styles.cardFooterInfo}>
+                        <Text style={styles.cardDateInfo}>VENCIMENTO</Text>
+                        <Text style={styles.cardDateInfoStrong}>Dia {dueDay}</Text>
+                      </View>
+
+                      <View style={styles.cardFooterInfoRight}>
+                        <Text style={styles.cardDateInfo}>MELHOR COMPRA</Text>
+                        <Text style={styles.cardDateInfoStrong}>Dia {bestPurchaseDay}</Text>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -437,9 +458,7 @@ export const CardsScreen: React.FC = () => {
               })}
             </ScrollView>
 
-            {/* Dots Indicator & Ações do Cartão Selecionado */}
             <View style={styles.cardActionsBar}>
-              {/* Dots */}
               <View style={styles.dotsRow}>
                 {cards.map((_, dotIdx) => (
                   <View
@@ -454,7 +473,6 @@ export const CardsScreen: React.FC = () => {
                 ))}
               </View>
 
-              {/* Botões Editar / Excluir */}
               {activeCard && (
                 <View style={styles.cardEditActions}>
                   <TouchableOpacity
@@ -477,9 +495,79 @@ export const CardsScreen: React.FC = () => {
                 </View>
               )}
             </View>
+
+            {activeCard && activeCardFinancials && (
+              <View
+                style={[
+                  styles.cardDetailsPanel,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.cardDetailsHeader}>
+                  <View>
+                    <Text style={[styles.cardDetailsLabel, { color: colors.textSecondary }]}>Fatura atual</Text>
+                    <Text
+                      style={[
+                        styles.cardDetailsInvoiceAmount,
+                        { color: activeCardFinancials.usedLimit > 0 ? '#9f1239' : colors.text },
+                      ]}
+                    >
+                      {showValues ? formatCurrency(activeCardFinancials.usedLimit) : hiddenCurrency}
+                    </Text>
+                  </View>
+
+                  <View style={styles.cardDetailsRight}>
+                    <Text style={[styles.cardDetailsLabel, { color: colors.textSecondary }]}>Uso do limite</Text>
+                    <Text style={[styles.cardDetailsPercent, { color: colors.text }]}>
+                      {Math.round(activeLimitUsedPercent)}%
+                    </Text>
+                  </View>
+                </View>
+
+                <View
+                  style={[
+                    styles.limitProgressTrack,
+                    { backgroundColor: isDarkMode ? '#27272a' : '#f3f4f6' },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.limitProgressBar,
+                      {
+                        width: `${activeLimitUsedPercent}%` as `${number}%`,
+                        backgroundColor: activeLimitUsedPercent > 80 ? '#ef4444' : '#6C5CE7',
+                      },
+                    ]}
+                  />
+                </View>
+
+                <View style={styles.cardDetailsRows}>
+                  <View style={styles.cardDetailsRow}>
+                    <Text style={[styles.cardDetailsLabel, { color: colors.textSecondary }]}>Disponível</Text>
+                    <Text style={[styles.cardDetailsValue, { color: colors.text }]}>
+                      {showValues ? formatCurrency(activeCardFinancials.availableLimit) : hiddenCurrency}
+                    </Text>
+                  </View>
+                </View>
+
+                {activeCardFinancials.usedLimit > 0 && !activeCardFinancials.isMonthPaid && (
+                  <TouchableOpacity
+                    onPress={() => setIsPayModalOpen(true)}
+                    style={[styles.payBillButton, { backgroundColor: '#6C5CE7' }]}
+                    activeOpacity={0.8}
+                  >
+                    <CreditCard size={18} color="#ffffff" />
+                    <Text style={styles.payBillButtonText}>Pagar Fatura</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         ) : !loading ? (
-          /* Estado Vazio de Cartões */
+          /* Estado Vazio de Cartoes */
           <TouchableOpacity
             onPress={() => {
               setCardToEdit(null);
@@ -510,238 +598,6 @@ export const CardsScreen: React.FC = () => {
           </TouchableOpacity>
         ) : null}
 
-        {/* Card: Fatura Atual */}
-        {activeCard && (
-          <View
-            style={[
-              styles.infoCardBlock,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            {/* Top Row Fatura */}
-            <View style={styles.infoCardTopRow}>
-              <View style={styles.iconAndTitleRow}>
-                <View style={[styles.headerIconBadge, { backgroundColor: isDarkMode ? '#1e1b4b' : '#e0e7ff' }]}>
-                  <CreditCard size={18} color="#6C5CE7" />
-                </View>
-                <View>
-                  <Text style={[styles.infoBlockTitle, { color: colors.text }]}>
-                    Fatura Atual
-                  </Text>
-                  <Text style={[styles.infoBlockSubtitle, { color: colors.textSecondary }]}>
-                    Total a pagar
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.infoCardTopRight}>
-                <TouchableOpacity
-                  onPress={() => setShowValues(!showValues)}
-                  style={styles.eyeToggleBtn}
-                  activeOpacity={0.7}
-                >
-                  {showValues ? (
-                    <Eye size={18} color={colors.textSecondary} />
-                  ) : (
-                    <EyeOff size={18} color={colors.textSecondary} />
-                  )}
-                </TouchableOpacity>
-
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor: isMonthPaid
-                        ? 'rgba(16, 185, 129, 0.15)'
-                        : usedLimit > 0
-                        ? 'rgba(245, 158, 11, 0.15)'
-                        : 'rgba(16, 185, 129, 0.15)',
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      {
-                        color: isMonthPaid
-                          ? '#10b981'
-                          : usedLimit > 0
-                          ? '#f59e0b'
-                          : '#10b981',
-                      },
-                    ]}
-                  >
-                    {isMonthPaid ? 'Paga' : usedLimit > 0 ? 'Aberta' : 'Zerada'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Valor da Fatura */}
-            <Text style={[styles.largeAmountText, { color: colors.text }]}>
-              {showValues
-                ? `R$ ${usedLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                : 'R$ ••••••'}
-            </Text>
-
-            {/* Grid 2 colunas: Melhor dia e Status */}
-            <View style={styles.twoColsCardGrid}>
-              <View
-                style={[
-                  styles.smallStatCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.smallStatLabel, { color: colors.textSecondary }]}>
-                  MELHOR DIA DE COMPRA
-                </Text>
-                <Text style={[styles.smallStatValue, { color: colors.text }]}>
-                  Dia {activeCard.bestDay || '10'}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.smallStatCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.smallStatLabel, { color: colors.textSecondary }]}>
-                  STATUS DO PAGAMENTO
-                </Text>
-                <Text
-                  style={[
-                    styles.smallStatValue,
-                    { color: isMonthPaid ? '#10b981' : '#f59e0b' },
-                  ]}
-                >
-                  {isMonthPaid ? 'Fatura paga' : usedLimit > 0 ? 'Em aberto' : 'Em dia'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Botão Pagar Fatura */}
-            {usedLimit > 0 && !isMonthPaid && (
-              <TouchableOpacity
-                onPress={() => setIsPayModalOpen(true)}
-                style={[styles.payBillButton, { backgroundColor: '#6C5CE7' }]}
-                activeOpacity={0.8}
-              >
-                <CreditCard size={18} color="#ffffff" />
-                <Text style={styles.payBillButtonText}>Pagar Fatura</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* Card: Limite Disponível */}
-        {activeCard && (
-          <View
-            style={[
-              styles.infoCardBlock,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.iconAndTitleRow}>
-              <View
-                style={[
-                  styles.headerIconBadge,
-                  { backgroundColor: isDarkMode ? '#064e3b' : '#ecfdf5' },
-                ]}
-              >
-                <TrendingDown size={18} color="#10b981" />
-              </View>
-              <View>
-                <Text style={[styles.infoBlockTitle, { color: colors.text }]}>
-                  Limite Disponível
-                </Text>
-                <Text style={[styles.infoBlockSubtitle, { color: colors.textSecondary }]}>
-                  Disponível para compras
-                </Text>
-              </View>
-            </View>
-
-            {/* Valor Disponível */}
-            <Text style={[styles.largeAmountText, { color: colors.text }]}>
-              {showValues
-                ? `R$ ${availableLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                : 'R$ ••••••'}
-            </Text>
-
-            {/* Barra de Progresso de Limite Utilizado */}
-            <View
-              style={[
-                styles.limitProgressTrack,
-                { backgroundColor: isDarkMode ? '#27272a' : '#f3f4f6' },
-              ]}
-            >
-              <View
-                style={[
-                  styles.limitProgressBar,
-                  {
-                    width: `${limitUsedPercent}%`,
-                    backgroundColor: limitUsedPercent > 80 ? '#ef4444' : '#6C5CE7',
-                  },
-                ]}
-              />
-            </View>
-
-            {/* Grid 2 colunas: Limite Total e Utilizado */}
-            <View style={styles.twoColsCardGrid}>
-              <View
-                style={[
-                  styles.smallStatCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.smallStatLabel, { color: colors.textSecondary }]}>
-                  LIMITE TOTAL
-                </Text>
-                <Text style={[styles.smallStatValue, { color: colors.text }]}>
-                  {showValues
-                    ? `R$ ${totalLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                    : '••••••'}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.smallStatCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.smallStatLabel, { color: colors.textSecondary }]}>
-                  UTILIZADO
-                </Text>
-                <Text style={[styles.smallStatValue, { color: colors.text }]}>
-                  {showValues
-                    ? `R$ ${usedLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${limitUsedPercentLabel}%)`
-                    : '••••••'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Últimos Lançamentos do Cartão */}
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Últimos Lançamentos
@@ -871,6 +727,29 @@ const styles = StyleSheet.create({
   addCardHeaderBtn: {
     padding: spacing.xs,
   },
+  cardsOverviewSection: {
+    gap: spacing.md,
+  },
+  cardsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: spacing.xs,
+  },
+  cardFinancialColumn: {
+    flex: 1,
+    gap: 4,
+  },
+  cardFinancialRightColumn: {
+    alignItems: 'flex-end',
+  },
+  cardFinancialLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cardFinancialValue: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
   cardsCarouselSection: {
     gap: spacing.md,
   },
@@ -879,53 +758,39 @@ const styles = StyleSheet.create({
     paddingRight: spacing.md,
   },
   creditCardVisual: {
-    height: 200,
+    aspectRatio: 1.586,
     borderRadius: 24,
     padding: spacing.lg,
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
   cardVisualTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
   },
-  cardSelectedTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  cardVisualMain: {
+    gap: spacing.md,
   },
-  cardSelectedTagText: {
-    fontSize: 9,
-    fontWeight: '800',
+  cardInfoLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.72)',
+    textTransform: 'uppercase',
+  },
+  cardLimitAmount: {
+    fontSize: 18,
+    fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: 0.5,
-  },
-  chipVisual: {
-    width: 38,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#eab308',
-    borderWidth: 1,
-    borderColor: '#ca8a04',
-    padding: 3,
-    justifyContent: 'center',
-  },
-  chipInnerGrid: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#ca8a04',
+    marginTop: 2,
   },
   cardDigitsText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#ffffff',
-    letterSpacing: 2,
+    letterSpacing: 1.4,
   },
   cardVisualBottom: {
     flexDirection: 'row',
@@ -933,10 +798,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   cardHolderName: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: 16,
     fontWeight: '800',
     color: '#ffffff',
-    textTransform: 'uppercase',
+  },
+  cardFooterInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  cardFooterInfoRight: {
+    alignItems: 'flex-end',
   },
   cardDatesRow: {
     flexDirection: 'row',
@@ -945,8 +817,15 @@ const styles = StyleSheet.create({
   },
   cardDateInfo: {
     fontSize: 9,
-    fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '800',
+    color: 'rgba(255, 255, 255, 0.75)',
+    letterSpacing: 0.4,
+  },
+  cardDateInfoStrong: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#ffffff',
+    marginTop: 2,
   },
   brandBadgeWrapper: {
     justifyContent: 'center',
@@ -1036,11 +915,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     gap: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
   },
   infoCardTopRow: {
     flexDirection: 'row',
@@ -1109,6 +983,49 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
+  cardDetailsPanel: {
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  cardDetailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  cardDetailsRight: {
+    alignItems: 'flex-end',
+  },
+  cardDetailsLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cardDetailsInvoiceAmount: {
+    fontSize: 24,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  cardDetailsPercent: {
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  cardDetailsRows: {
+    gap: spacing.sm,
+  },
+  cardDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  cardDetailsValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
   payBillButton: {
     width: '100%',
     height: 48,
@@ -1117,11 +1034,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    shadowColor: '#6C5CE7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   payBillButtonText: {
     color: '#ffffff',

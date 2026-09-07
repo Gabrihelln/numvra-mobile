@@ -92,6 +92,7 @@ export const AddFundsModal: FC<AddFundsModalProps> = ({
             },
           ]}
         >
+
           {/* Handle bar */}
           <View style={[styles.handle, { backgroundColor: isDarkMode ? '#2D2D3A' : '#E2E8F0' }]} />
 
@@ -226,7 +227,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'transparent',
   },
   modalContent: {
     borderTopLeftRadius: 32,

@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'transparent',
   },
   modalContent: {
     borderTopLeftRadius: 36,
@@ -117,11 +117,6 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     borderWidth: 1,
     borderBottomWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 2,
   },
   handle: {
     width: 40,
