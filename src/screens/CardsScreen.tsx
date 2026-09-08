@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
     paddingRight: spacing.md,
   },
   creditCardVisual: {
-    aspectRatio: 1.586,
+    aspectRatio: 1.777,
     borderRadius: 24,
     padding: spacing.lg,
     justifyContent: 'space-between',
