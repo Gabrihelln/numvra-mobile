@@ -1,31 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  useWindowDimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import {
-  CreditCard,
-  Plus,
-  ChevronRight,
-  Sparkles,
-  ShoppingBag,
-  Utensils,
-  Music,
-  Smartphone,
-  Home,
-  Globe,
-  Trash2,
-  Edit2,
-  Lock,
-} from 'lucide-react-native';
+import { CalendarDays, ChevronRight, CreditCard, FileText, Lightbulb, Lock, PieChart, Plus, Settings } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { cardService } from '../services/cardService';
@@ -33,302 +10,177 @@ import { transactionService } from '../services/transactionService';
 import { CreditCardType, Transaction } from '../types';
 import { PayCardBillModal, PayCardBillData } from '../components/modals/PayCardBillModal';
 import { AddEditCardModal } from '../components/modals/AddEditCardModal';
-import { spacing, borderRadius, typography } from '../theme';
-import { formatBrazilianDate } from '../utils/dateFormat';
+import { formatCardTransactionDate } from '../utils/dateFormat';
+import { TransactionIcon } from '../components/common/TransactionIcon';
+import { useCategories } from '../contexts/CategoryContext';
 
-type LegacyCreditCardFields = CreditCardType & {
-  limit?: number;
-  isMonthPaid?: boolean;
-  expirationDate?: string;
+type LegacyCreditCardFields = CreditCardType & { limit?: number; isMonthPaid?: boolean; expirationDate?: string; isMain?: boolean; isPrimary?: boolean; bankName?: string; };
+type CardTab = 'Resumo' | 'Faturas' | 'Transações' | 'Limite' | 'Configurações';
+
+const CARD_SCREEN_TYPE = {
+  caption: 11,
+  small: 12,
+  secondary: 13,
+  body: 14,
+  button: 14,
+  cardTitle: 16,
+  sectionTitle: 18,
+  screenTitle: 28,
+  financialValue: 27,
+};
+const getPagePadding = (width: number) => width < 360 ? 16 : width < 400 ? 18 : 22;
+
+const PRIMARY = '#5748FF';
+const MASKED_CARD_DIGITS = '\u2022\u2022\u2022\u2022';
+const TABS: CardTab[] = ['Resumo', 'Faturas', 'Transações', 'Limite', 'Configurações'];
+const toFiniteNumber = (value: unknown) => { const n = Number(value); return Number.isFinite(n) ? n : 0; };
+const formatCurrency = (value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const getTimestamp = (tx: Transaction) => {
+  const createdAt = tx.createdAt;
+  if (typeof createdAt?.toMillis === 'function') return createdAt.toMillis();
+  if (typeof createdAt?.seconds === 'number') return createdAt.seconds * 1000;
+  return new Date(tx.date || 0).getTime() || 0;
+};
+const getCardDayLabel = (value: unknown, fallback = '10') => {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(8, 10).replace(/^0/, '') || fallback;
+  if (/^\d{1,2}\/\d{1,2}/.test(raw)) return raw.split('/')[0].replace(/^0/, '') || fallback;
+  return raw.replace(/^0+(?=\d)/, '') || fallback;
+};
+const getDueMonthLabel = (day: string) => {
+  const today = new Date();
+  const dueDate = new Date(today.getFullYear(), today.getMonth(), Number(day) || today.getDate());
+  return dueDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+};
+const getBrandLabel = (brand?: string) => {
+  const normalized = (brand || 'other').toLowerCase();
+  if (normalized.includes('master')) return 'mastercard';
+  if (normalized.includes('amex') || normalized.includes('american')) return 'AMEX';
+  if (normalized.includes('hiper')) return 'HIPERCARD';
+  if (normalized.includes('visa')) return 'VISA';
+  if (normalized.includes('elo')) return 'ELO';
+  return 'CARTÃO';
+};
+const getCardBgColor = (card: LegacyCreditCardFields, index: number) => {
+  const color = card.color || card.colorClass || card.theme;
+  if (typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)) return color;
+  return ['#5B2CFF', '#1F1D2B', '#4B5563', '#0F766E', '#9A3412'][index % 5];
+};
+const getCardFinancials = (card: LegacyCreditCardFields, transactions: Transaction[]) => {
+  const totalLimit = Math.max(0, toFiniteNumber(card.totalLimit ?? card.creditLimit ?? card.limit));
+  const txTotal = transactions.reduce((total, tx) => tx.type === 'expense' && tx.cardId === card.id ? total + Math.abs(toFiniteNumber(tx.amount)) : total, 0);
+  const usedLimit = Math.max(0, toFiniteNumber(card.usedLimit ?? txTotal));
+  const usedPercent = totalLimit > 0 ? Math.min(Math.max((usedLimit / totalLimit) * 100, 0), 100) : 0;
+  return { totalLimit, usedLimit, availableLimit: Math.max(0, totalLimit - usedLimit), usedPercent, availablePercent: totalLimit > 0 ? Math.max(0, 100 - usedPercent) : 0, isMonthPaid: card.isMonthPaid || false };
 };
 
-type LegacyTransactionFields = Transaction & {
-  installmentTotal?: number;
-  installmentNumber?: number;
-  installmentAmount?: number;
-};
-
-const toFiniteNumber = (value: unknown) => {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? numericValue : 0;
-};
 export const CardsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const CARD_WIDTH = screenWidth - spacing.lg * 2;
-  const CARD_GAP = spacing.md;
-  const CARD_ITEM_WIDTH = CARD_WIDTH + CARD_GAP;
-  const { colors, isDarkMode } = useTheme();
+  const { colors } = useTheme();
   const { user, checkLimit, triggerUpgrade } = useAuth();
-
+  const { categories } = useCategories();
+  const listRef = useRef<FlatList<CreditCardType>>(null);
+  const compactScreen = screenWidth < 360;
+  const pagePadding = getPagePadding(screenWidth);
+  const cardWidth = Math.min(276, Math.max(compactScreen ? 210 : 224, screenWidth * 0.62));
+  const cardGap = compactScreen ? 14 : 18;
+  const snapInterval = cardWidth + cardGap;
+  const carouselPadding = Math.max(20, (screenWidth - cardWidth) / 2);
   const [cards, setCards] = useState<CreditCardType[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedCardIndex, setSelectedCardIndex] = useState(0);
-  const showValues = true;
+  const [activeTab, setActiveTab] = useState<CardTab>('Resumo');
   const [loading, setLoading] = useState(true);
-
-  // Modais
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
   const [cardToEdit, setCardToEdit] = useState<CreditCardType | null>(null);
+  const cardAccess = checkLimit('card');
+  const activeCard = (cards[selectedCardIndex] || null) as LegacyCreditCardFields | null;
 
   useEffect(() => {
-    if (!user) {
-      setCards([]);
-      setTransactions([]);
-      setLoading(false);
-      return;
-    }
-
+    if (!user) { setCards([]); setTransactions([]); setLoading(false); return; }
     const unsubCards = cardService.subscribeToCards((cardsList) => {
       setCards(cardsList);
-      setSelectedCardIndex((currentIndex) =>
-        currentIndex >= cardsList.length ? Math.max(0, cardsList.length - 1) : currentIndex
-      );
+      setSelectedCardIndex((current) => current >= cardsList.length ? Math.max(0, cardsList.length - 1) : current);
       setLoading(false);
     });
-
-    const unsubTx = transactionService.subscribeToTransactions((txList) => {
-      setTransactions(txList);
-    });
-
-    return () => {
-      unsubCards();
-      unsubTx();
-    };
+    const unsubTx = transactionService.subscribeToTransactions(setTransactions);
+    return () => { unsubCards(); unsubTx(); };
   }, [user]);
 
-  const activeCard = (cards[selectedCardIndex] || null) as LegacyCreditCardFields | null;
-  const cardAccess = checkLimit('card');
+  const cardTransactions = useMemo(() => transactions
+    .filter((tx) => (tx.isCardCharge || tx.cardId) && (activeCard?.id ? tx.cardId === activeCard.id : true))
+    .sort((a, b) => getTimestamp(b) - getTimestamp(a)), [transactions, activeCard?.id]);
+  const latestCardTransactions = cardTransactions.slice(0, 5);
+  const categoriesByName = useMemo(() => new Map(categories.map((category) => [category.name?.trim().toLowerCase(), category])), [categories]);
+  const activeCardFinancials = activeCard ? getCardFinancials(activeCard, transactions) : null;
+  const dueDay = activeCard ? getCardDayLabel(activeCard.dueDay ?? activeCard.dueDate ?? activeCard.bestDay) : '10';
+  const bestPurchaseDay = activeCard ? getCardDayLabel(activeCard.bestDay) : '10';
+  const holderName = (user?.displayName || user?.email?.split('@')[0] || 'NUMVRA').toUpperCase();
 
-  const toFiniteNumber = (value: unknown) => {
-    const numericValue = Number(value);
-    return Number.isFinite(numericValue) ? numericValue : 0;
-  };
+  const openAddCard = () => { setCardToEdit(null); setIsAddEditModalOpen(true); };
+  const openEditCard = () => { if (activeCard) { setCardToEdit(activeCard); setIsAddEditModalOpen(true); } };
 
-  const cardTransactions = useMemo(
-    () =>
-      transactions.filter(
-        (tx) =>
-          (tx.isCardCharge || tx.cardId) &&
-          (activeCard?.id ? tx.cardId === activeCard.id : true)
-      ),
-    [transactions, activeCard?.id]
-  );
-
-  const latestCardTransactions = cardTransactions.slice(0, 10);
-
-  const formatCurrency = (value: number) =>
-    `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-
-  const hiddenCurrency = 'R$ ******';
-
-  const getCardDayLabel = (value: unknown) => {
-    const rawValue = String(value || '').trim();
-    if (!rawValue) return '10';
-
-    if (/^\d{4}-\d{2}-\d{2}/.test(rawValue)) {
-      return rawValue.slice(8, 10).replace(/^0/, '') || rawValue;
-    }
-
-    if (/^\d{2}\/\d{2}\/\d{4}/.test(rawValue)) {
-      return rawValue.slice(0, 2).replace(/^0/, '') || rawValue;
-    }
-
-    return rawValue.replace(/^0+(?=\d)/, '');
-  };
-
-  const getCardFinancials = (card: LegacyCreditCardFields) => {
-    const cardTotalLimit = Math.max(
-      0,
-      toFiniteNumber(card.totalLimit ?? card.creditLimit ?? card.limit)
-    );
-    const cardTransactionTotal = transactions.reduce((total, tx) => {
-      if (tx.type !== 'expense' || tx.cardId !== card.id) return total;
-      return total + Math.abs(toFiniteNumber(tx.amount));
-    }, 0);
-    const cardUsedLimit = Math.max(0, toFiniteNumber(card.usedLimit ?? cardTransactionTotal));
-
-    return {
-      totalLimit: cardTotalLimit,
-      usedLimit: cardUsedLimit,
-      availableLimit: Math.max(0, cardTotalLimit - cardUsedLimit),
-      isMonthPaid: card.isMonthPaid || false,
-    };
-  };
-
-  const activeCardFinancials = activeCard ? getCardFinancials(activeCard) : null;
-  const activeLimitUsedPercent = activeCardFinancials && activeCardFinancials.totalLimit > 0
-    ? Math.min(Math.max((activeCardFinancials.usedLimit / activeCardFinancials.totalLimit) * 100, 0), 100)
-    : 0;
-  // Handlers de Ações
   const handlePayBillConfirm = async (data: PayCardBillData) => {
-    if (!cardAccess.allowed) {
-      triggerUpgrade?.('card', cardAccess.reason);
-      return;
-    }
-
+    if (!cardAccess.allowed) { triggerUpgrade?.('card', cardAccess.reason); return; }
     try {
-            const paymentDate = new Date().toISOString().split('T')[0];
-      const cardLabel = `${data.card.name} (•••• ${data.card.finalDigits})`;
-
-      await transactionService.addTransaction({
-        title: `Pagamento Fatura - ${data.card.name}`,
-        description: `Pagamento Fatura - ${data.card.name}`,
-        amount: -data.paidAmount,
-        type: 'expense',
-        category: 'Cartão de Crédito',
-        date: paymentDate,
-        isCardCharge: false,
-        cardId: data.card.id,
-        cardName: cardLabel,
-        status: 'completed',
-      });
-
+      const paymentDate = new Date().toISOString().split('T')[0];
+      const cardLabel = `${data.card.name} (${MASKED_CARD_DIGITS} ${data.card.finalDigits})`;
+      await transactionService.addTransaction({ title: `Pagamento Fatura - ${data.card.name}`, description: `Pagamento Fatura - ${data.card.name}`, amount: -data.paidAmount, type: 'expense', category: 'Cart\u00E3o de Cr\u00E9dito', date: paymentDate, isCardCharge: false, cardId: data.card.id, cardName: cardLabel, status: 'completed' });
       if (data.isInstallmentRest && data.installmentCount && data.installmentValue) {
         for (let index = 0; index < data.installmentCount; index++) {
           const installmentDate = new Date();
           installmentDate.setMonth(installmentDate.getMonth() + index + 1);
-
-          await transactionService.addTransaction({
-            title: `Parcelamento Fatura - ${data.card.name} (${index + 1}/${data.installmentCount})`,
-            description: `Parcelamento Fatura - ${data.card.name}`,
-            amount: -data.installmentValue,
-            type: 'expense',
-            category: 'Cartão de Crédito',
-            date: installmentDate.toISOString().split('T')[0],
-            isCardCharge: true,
-            cardId: data.card.id,
-            cardName: cardLabel,
-            installments: data.installmentCount,
-            currentInstallment: index + 1,
-            status: 'completed',
-          });
+          await transactionService.addTransaction({ title: `Parcelamento Fatura - ${data.card.name} (${index + 1}/${data.installmentCount})`, description: `Parcelamento Fatura - ${data.card.name}`, amount: -data.installmentValue, type: 'expense', category: 'Cart\u00E3o de Cr\u00E9dito', date: installmentDate.toISOString().split('T')[0], isCardCharge: true, cardId: data.card.id, cardName: cardLabel, installments: data.installmentCount, currentInstallment: index + 1, status: 'completed' });
         }
       }
-
-      const finalUsedLimit = data.isInstallmentRest && data.installmentCount && data.installmentValue
-        ? data.installmentCount * data.installmentValue
-        : data.remainingAmount;
-
-      await cardService.updateCard(data.card.id, {
-        usedLimit: finalUsedLimit,
-        isMonthPaid: finalUsedLimit === 0,
-      } as Partial<LegacyCreditCardFields>);
-
+      const finalUsedLimit = data.isInstallmentRest && data.installmentCount && data.installmentValue ? data.installmentCount * data.installmentValue : data.remainingAmount;
+      await cardService.updateCard(data.card.id, { usedLimit: finalUsedLimit, isMonthPaid: finalUsedLimit === 0 } as Partial<LegacyCreditCardFields>);
       Alert.alert('Sucesso', 'Pagamento de fatura processado com sucesso!');
-    } catch (err: any) {
-      Alert.alert('Erro', err?.message || 'Falha ao processar pagamento.');
-    }
+    } catch (err: any) { Alert.alert('Erro', err?.message || 'Falha ao processar pagamento.'); }
   };
 
   const handleSaveCard = async (cardData: Partial<CreditCardType>) => {
-    if (!cardAccess.allowed) {
-      triggerUpgrade?.('card', cardAccess.reason);
-      return;
-    }
-
-    const legacyCardData = cardData as Partial<LegacyCreditCardFields>;
-    if (cardToEdit) {
-      await cardService.updateCard(cardToEdit.id, cardData);
-    } else {
-      await cardService.addCard({
-        name: cardData.name || 'Novo Cartão',
-        brand: cardData.brand || 'mastercard',
-        finalDigits: cardData.finalDigits || '1234',
-        expirationDate: legacyCardData.expirationDate || '12/28',
-        expiration: legacyCardData.expirationDate || cardData.expiration || '12/28',
-        bestDay: cardData.bestDay || 10,
-        limit: legacyCardData.limit || 1000,
-        totalLimit: cardData.totalLimit || 1000,
-        usedLimit: 0,
-        isMonthPaid: false,
-      } as Omit<LegacyCreditCardFields, 'id'>);
-    }
+    if (!cardAccess.allowed) { triggerUpgrade?.('card', cardAccess.reason); return; }
+    const legacy = cardData as Partial<LegacyCreditCardFields>;
+    if (cardToEdit) await cardService.updateCard(cardToEdit.id, cardData);
+    else await cardService.addCard({ name: cardData.name || 'Novo Cart\u00E3o', brand: cardData.brand || 'mastercard', finalDigits: cardData.finalDigits || '1234', expirationDate: legacy.expirationDate || '12/28', expiration: legacy.expirationDate || cardData.expiration || '12/28', bestDay: cardData.bestDay || 10, limit: legacy.limit || 1000, totalLimit: cardData.totalLimit || 1000, usedLimit: 0, isMonthPaid: false } as Omit<LegacyCreditCardFields, 'id'>);
   };
 
-  const handleDeleteCard = (card: CreditCardType) => {
-    if (!cardAccess.allowed) {
-      triggerUpgrade?.('card', cardAccess.reason);
-      return;
-    }
+  const onCarouselEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
+    setSelectedCardIndex(Math.max(0, Math.min(cards.length - 1, next)));
+  };
 
-    Alert.alert(
-      'Excluir Cartão',
-      `Deseja realmente remover o cartão "${card.name}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await cardService.deleteCard(card.id);
-            } catch (err) {
-              Alert.alert('Erro', 'Não foi possível excluir o cartão.');
-            }
-          },
-        },
-      ]
+  const renderPhysicalCard = ({ item, index }: { item: CreditCardType; index: number }) => {
+    const card = item as LegacyCreditCardFields;
+    const isSelected = selectedCardIndex === index;
+    const isMainCard = card.isMain || card.isPrimary || index === 0;
+    return (
+      <TouchableOpacity activeOpacity={0.9} onPress={() => { setSelectedCardIndex(index); listRef.current?.scrollToIndex({ index, animated: true }); }} style={[styles.carouselItem, { width: cardWidth, marginRight: index === cards.length - 1 ? 0 : cardGap, transform: [{ scale: isSelected ? 1 : 0.93 }], opacity: isSelected ? 1 : 0.78 }]} accessibilityLabel={`Cartão ${card.name}`}>
+        <View style={[styles.creditCardVisual, { backgroundColor: getCardBgColor(card, index) }]}>
+          <View style={styles.cardSheen} />
+          <View style={styles.cardVisualTop}>{isMainCard ? <Text style={styles.mainCardBadge}>Cartão principal</Text> : <View />}<Text style={styles.brandGenericText}>{getBrandLabel(card.brand)}</Text></View>
+          <Text style={styles.bankMark} numberOfLines={1}>{card.bankName || card.name || 'nu'}</Text>
+          <View style={styles.cardDigitsRow}><Text style={styles.cardDigitsText}>{MASKED_CARD_DIGITS} {card.finalDigits || '1234'}</Text><View style={styles.cardChip}><View style={styles.chipLine} /><View style={styles.chipLine} /></View></View>
+          <Text style={styles.cardHolderName} numberOfLines={1}>{holderName}</Text>
+        </View>
+      </TouchableOpacity>
     );
-  };
-
-  // Helper para renderizar ícone de categoria
-  const renderTxCategoryIcon = (category: string) => {
-    const cat = category?.toLowerCase() || '';
-    if (cat.includes('shop') || cat.includes('compra')) return <ShoppingBag size={18} color="#f97316" />;
-    if (cat.includes('rest') || cat.includes('comida') || cat.includes('ifood')) return <Utensils size={18} color="#3b82f6" />;
-    if (cat.includes('spotify') || cat.includes('música') || cat.includes('show')) return <Music size={18} color="#10b981" />;
-    if (cat.includes('tecn') || cat.includes('eletr')) return <Smartphone size={18} color="#8b5cf6" />;
-    if (cat.includes('casa') || cat.includes('home')) return <Home size={18} color="#ec4899" />;
-    return <Globe size={18} color="#6C5CE7" />;
-  };
-
-  // Helper para cor de gradiente do cartão físico
-  const getCardBgColor = (brand: string, index: number) => {
-    const themes = [
-      '#4C1D95', // Nubank Ultravioleta Roxo Profundo
-      '#065F46', // Emerald Green
-      '#1E293B', // Slate Titanium
-      '#9A3412', // Amber Sunset
-    ];
-    return themes[index % themes.length];
   };
 
   if (!cardAccess.allowed) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View
-          style={[
-            styles.headerFixed,
-            {
-              backgroundColor: colors.card,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Cartões de Crédito
-          </Text>
-          <View style={styles.addCardHeaderBtn} />
-        </View>
-
-        <View style={styles.lockedContainer}>
-          <View style={[styles.lockedIconBox, { backgroundColor: isDarkMode ? '#1e1b4b' : '#e0e7ff' }]}>
-            <Lock size={34} color="#6C5CE7" />
-          </View>
-          <Text style={[styles.lockedTitle, { color: colors.text }]}>
-            Recurso Premium
-          </Text>
-          <Text style={[styles.lockedText, { color: colors.textSecondary }]}>
-            {cardAccess.reason}
-          </Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Plan')}
-            style={styles.lockedButton}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.lockedButtonText}>Ver planos</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.lockedState}>
+          <View style={styles.lockedIconWrap}><Lock size={34} color={PRIMARY} /></View>
+          <Text style={[styles.lockedTitle, { color: colors.text }]}>Cartões indisponíveis</Text>
+          <Text style={[styles.lockedText, { color: colors.textSecondary }]}>{cardAccess.reason || 'Atualize seu plano para gerenciar cartões.'}</Text>
+          <TouchableOpacity style={styles.primaryButtonSmall} onPress={() => triggerUpgrade?.('card', cardAccess.reason)} activeOpacity={0.85}>
+            <Text style={styles.primaryButtonSmallText}>Atualizar plano</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -336,843 +188,258 @@ export const CardsScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      {/* Header Superior Fixo */}
-      <View
-        style={[
-          styles.headerFixed,
-          {
-            backgroundColor: colors.card,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Cartões de Crédito
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            setCardToEdit(null);
-            setIsAddEditModalOpen(true);
-          }}
-          style={styles.addCardHeaderBtn}
-          activeOpacity={0.7}
-        >
-          <Plus size={20} color="#6C5CE7" strokeWidth={2.5} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Resumo e lista de cartoes */}
-        {cards.length > 0 ? (
-          <View style={styles.cardsOverviewSection}>
-            <Text style={[styles.cardsSectionTitle, { color: colors.text }]}>
-              Meus cartões
-            </Text>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              snapToInterval={CARD_ITEM_WIDTH}
-              decelerationRate="fast"
-              disableIntervalMomentum
-              contentContainerStyle={styles.cardsScrollTrack}
-              onMomentumScrollEnd={(e) => {
-                const offsetX = e.nativeEvent.contentOffset.x;
-                const newIdx = Math.round(offsetX / CARD_ITEM_WIDTH);
-                if (newIdx >= 0 && newIdx < cards.length) {
-                  setSelectedCardIndex(newIdx);
-                }
-              }}
-            >
-              {cards.map((card, idx) => {
-                const isSelected = selectedCardIndex === idx;
-                const cardBg = getCardBgColor(card.brand, idx);
-                const financials = getCardFinancials(card as LegacyCreditCardFields);
-                const dueDay = getCardDayLabel(card.dueDay ?? card.dueDate ?? card.bestDay);
-                const bestPurchaseDay = getCardDayLabel(card.bestDay);
-
-                return (
-                  <TouchableOpacity
-                    key={card.id}
-                    onPress={() => setSelectedCardIndex(idx)}
-                    activeOpacity={0.9}
-                    style={[
-                      styles.creditCardVisual,
-                      {
-                        backgroundColor: cardBg,
-                        width: CARD_WIDTH,
-                        borderColor: isSelected ? 'rgba(255, 255, 255, 0.55)' : 'rgba(255, 255, 255, 0.18)',
-                      },
-                    ]}
-                  >
-                    <View style={styles.cardVisualTop}>
-                      <Text style={styles.cardHolderName} numberOfLines={1}>{card.name}</Text>
-
-                      <View style={styles.brandBadgeWrapper}>
-                        {card.brand === 'mastercard' ? (
-                          <View style={styles.mastercardCircles}>
-                            <View style={[styles.mcCircle, { backgroundColor: '#eb001b' }]} />
-                            <View style={[styles.mcCircle, { backgroundColor: '#f79e1b', marginLeft: -10 }]} />
-                          </View>
-                        ) : card.brand && card.brand !== 'other' ? (
-                          <Text style={styles.brandGenericText}>
-                            {card.brand.toUpperCase()}
-                          </Text>
-                        ) : (
-                          <CreditCard size={24} color="#ffffff" />
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.cardVisualMain}>
-                      <Text style={styles.cardDigitsText}>
-                        •••• •••• •••• {card.finalDigits || '1234'}
-                      </Text>
-
-                      <View>
-                        <Text style={styles.cardInfoLabel}>Limite total</Text>
-                        <Text style={styles.cardLimitAmount}>
-                          {showValues ? formatCurrency(financials.totalLimit) : hiddenCurrency}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.cardVisualBottom}>
-                      <View style={styles.cardFooterInfo}>
-                        <Text style={styles.cardDateInfo}>VENCIMENTO</Text>
-                        <Text style={styles.cardDateInfoStrong}>Dia {dueDay}</Text>
-                      </View>
-
-                      <View style={styles.cardFooterInfoRight}>
-                        <Text style={styles.cardDateInfo}>MELHOR COMPRA</Text>
-                        <Text style={styles.cardDateInfoStrong}>Dia {bestPurchaseDay}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <View style={styles.cardActionsBar}>
-              <View style={styles.dotsRow}>
-                {cards.map((_, dotIdx) => (
-                  <View
-                    key={dotIdx}
-                    style={[
-                      styles.dot,
-                      selectedCardIndex === dotIdx
-                        ? { backgroundColor: '#6C5CE7', width: 20 }
-                        : { backgroundColor: colors.border },
-                    ]}
-                  />
-                ))}
-              </View>
-
-              {activeCard && (
-                <View style={styles.cardEditActions}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setCardToEdit(activeCard);
-                      setIsAddEditModalOpen(true);
-                    }}
-                    style={styles.cardActionIconBtn}
-                    activeOpacity={0.7}
-                  >
-                    <Edit2 size={16} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteCard(activeCard)}
-                    style={styles.cardActionIconBtn}
-                    activeOpacity={0.7}
-                  >
-                    <Trash2 size={16} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            {activeCard && activeCardFinancials && (
-              <View
-                style={[
-                  styles.cardDetailsPanel,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.cardDetailsHeader}>
-                  <View>
-                    <Text style={[styles.cardDetailsLabel, { color: colors.textSecondary }]}>Fatura atual</Text>
-                    <Text
-                      style={[
-                        styles.cardDetailsInvoiceAmount,
-                        { color: activeCardFinancials.usedLimit > 0 ? '#9f1239' : colors.text },
-                      ]}
-                    >
-                      {showValues ? formatCurrency(activeCardFinancials.usedLimit) : hiddenCurrency}
-                    </Text>
-                  </View>
-
-                  <View style={styles.cardDetailsRight}>
-                    <Text style={[styles.cardDetailsLabel, { color: colors.textSecondary }]}>Uso do limite</Text>
-                    <Text style={[styles.cardDetailsPercent, { color: colors.text }]}>
-                      {Math.round(activeLimitUsedPercent)}%
-                    </Text>
-                  </View>
-                </View>
-
-                <View
-                  style={[
-                    styles.limitProgressTrack,
-                    { backgroundColor: isDarkMode ? '#27272a' : '#f3f4f6' },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.limitProgressBar,
-                      {
-                        width: `${activeLimitUsedPercent}%` as `${number}%`,
-                        backgroundColor: activeLimitUsedPercent > 80 ? '#ef4444' : '#6C5CE7',
-                      },
-                    ]}
-                  />
-                </View>
-
-                <View style={styles.cardDetailsRows}>
-                  <View style={styles.cardDetailsRow}>
-                    <Text style={[styles.cardDetailsLabel, { color: colors.textSecondary }]}>Disponível</Text>
-                    <Text style={[styles.cardDetailsValue, { color: colors.text }]}>
-                      {showValues ? formatCurrency(activeCardFinancials.availableLimit) : hiddenCurrency}
-                    </Text>
-                  </View>
-                </View>
-
-                {activeCardFinancials.usedLimit > 0 && !activeCardFinancials.isMonthPaid && (
-                  <TouchableOpacity
-                    onPress={() => setIsPayModalOpen(true)}
-                    style={[styles.payBillButton, { backgroundColor: '#6C5CE7' }]}
-                    activeOpacity={0.8}
-                  >
-                    <CreditCard size={18} color="#ffffff" />
-                    <Text style={styles.payBillButtonText}>Pagar Fatura</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: 78 + insets.bottom }]}>
+        <View style={[styles.header, { paddingHorizontal: pagePadding }]}>
+          <View style={styles.headerTextWrap}>
+            <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={1.15}>Cartões</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.2}>Gerencie seus cartões e tenha mais controle.</Text>
           </View>
-        ) : !loading ? (
-          /* Estado Vazio de Cartoes */
-          <TouchableOpacity
-            onPress={() => {
-              setCardToEdit(null);
-              setIsAddEditModalOpen(true);
-            }}
-            style={[
-              styles.emptyCardDashed,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-              },
-            ]}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.emptyCardIconBox, { backgroundColor: isDarkMode ? '#1e1b4b' : '#e0e7ff' }]}>
-              <CreditCard size={32} color="#6C5CE7" />
-            </View>
-            <Text style={[styles.emptyCardTitle, { color: colors.text }]}>
-              Nenhum cartão cadastrado
-            </Text>
-            <Text style={[styles.emptyCardSubtitle, { color: colors.textSecondary }]}>
-              Cadastre seu cartão para controlar faturas, limites e datas de corte automaticamente.
-            </Text>
-            <View style={[styles.addFirstCardBtn, { backgroundColor: '#6C5CE7' }]}>
-              <Plus size={16} color="#ffffff" />
-              <Text style={styles.addFirstCardText}>Cadastrar Primeiro Cartão</Text>
-            </View>
-          </TouchableOpacity>
-        ) : null}
-
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Últimos Lançamentos
-          </Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Statement')}
-            style={styles.detailsLink}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.detailsText, { color: '#6C5CE7' }]}>Ver Detalhes</Text>
-            <ChevronRight size={14} color="#6C5CE7" />
+          <TouchableOpacity style={styles.addCardButton} onPress={openAddCard} activeOpacity={0.85}>
+            <View style={styles.addCardIcon}><Plus size={18} color="#FFFFFF" strokeWidth={2.5} /></View>
+            <Text style={styles.addCardText} maxFontSizeMultiplier={1.15}>Adicionar cartão</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Lista de Transações */}
-        {latestCardTransactions.length > 0 ? (
-          <View style={styles.transactionsList}>
-            {latestCardTransactions.map((tx) => (
-              <View
-                key={tx.id}
-                style={[
-                  styles.transactionItemCard,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.txLeft}>
-                  <View
-                    style={[
-                      styles.txIconSquare,
-                      { backgroundColor: isDarkMode ? '#27272a' : '#f3f4f6' },
-                    ]}
-                  >
-                    {renderTxCategoryIcon(tx.category)}
-                  </View>
-                  <View>
-                    <Text style={[styles.txTitle, { color: colors.text }]}>
-                      {tx.description}
-                    </Text>
-                    <View style={styles.txSubRow}>
-                      <Text style={[styles.txDate, { color: colors.textSecondary }]}>
-                        {formatBrazilianDate(tx.date)}
-                      </Text>
-                      {(tx as LegacyTransactionFields).installmentTotal && (tx as LegacyTransactionFields).installmentTotal! > 1 ? (
-                        <View style={styles.installmentBadge}>
-                          <Text style={styles.installmentBadgeText}>
-                            {(tx as LegacyTransactionFields).installmentNumber || 1}/{(tx as LegacyTransactionFields).installmentTotal ?? 0}x
-                          </Text>
-                        </View>
-                      ) : null}
+        {loading ? (
+          <View style={styles.loadingState}><ActivityIndicator color={PRIMARY} /></View>
+        ) : cards.length === 0 ? (
+          <View style={styles.emptyState}>
+            <CreditCard size={30} color={PRIMARY} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Nenhum cartão cadastrado</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Adicione seu primeiro cartão para acompanhar faturas e limites.</Text>
+            <TouchableOpacity style={styles.primaryButtonSmall} onPress={openAddCard} activeOpacity={0.85}>
+              <Text style={styles.primaryButtonSmallText}>Adicionar cartão</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <FlatList
+              ref={listRef}
+              data={cards}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={snapInterval}
+              decelerationRate="fast"
+              bounces={false}
+              onMomentumScrollEnd={onCarouselEnd}
+              renderItem={renderPhysicalCard}
+              contentContainerStyle={{ paddingHorizontal: carouselPadding }}
+              getItemLayout={(_, index) => ({ length: snapInterval, offset: snapInterval * index, index })}
+            />
+            <View style={styles.dotsRow}>
+              {cards.map((card, index) => <View key={card.id} style={[styles.dot, selectedCardIndex === index && styles.dotActive]} />)}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabsRow, { paddingHorizontal: pagePadding }]}>
+              {TABS.map((tab) => (
+                <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} activeOpacity={0.85} style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}>
+                  <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {activeCard && activeCardFinancials && (
+              <View style={[styles.summaryCard, { marginHorizontal: pagePadding, padding: compactScreen ? 11 : 13, gap: compactScreen ? 7 : 8 }]}>
+                <View style={styles.invoiceColumn}>
+                  <Text style={styles.sectionOverline}>Fatura atual</Text>
+                  <Text style={[styles.invoiceAmount, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.1}>{formatCurrency(activeCardFinancials.usedLimit)}</Text>
+                  <Text style={[styles.invoiceDue, { color: colors.textSecondary }]}>Vence em {getDueMonthLabel(dueDay)}</Text>
+                  <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${activeCardFinancials.usedPercent}%` }]} /></View>
+                  <View style={styles.limitsRow}>
+                    <View style={styles.limitBlock}>
+                      <Text style={[styles.limitLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Limite utilizado</Text>
+                      <Text style={[styles.limitValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.1}>{formatCurrency(activeCardFinancials.usedLimit)}</Text>
+                      <View style={styles.limitMetaRow}>
+                        <Text style={[styles.limitMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>de {formatCurrency(activeCardFinancials.totalLimit)}</Text>
+                        <Text style={styles.usedPercent}>{Math.round(activeCardFinancials.usedPercent)}%</Text>
+                      </View>
+                    </View>
+                    <View style={styles.verticalDivider} />
+                    <View style={styles.limitBlock}>
+                      <Text style={[styles.limitLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Limite disponível</Text>
+                      <Text style={[styles.limitValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.1}>{formatCurrency(activeCardFinancials.availableLimit)}</Text>
+                      <View style={styles.limitMetaRow}><View /><Text style={styles.availablePercent}>{Math.round(activeCardFinancials.availablePercent)}%</Text></View>
                     </View>
                   </View>
                 </View>
-
-                <Text style={[styles.txAmount, { color: colors.text }]}>
-                  - R$ {Math.abs(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </Text>
+                <View style={styles.dateColumn}>
+                  <View style={styles.dateInfoRow}>
+                    <View style={styles.dateIconBox}><CalendarDays size={compactScreen ? 18 : 20} color={PRIMARY} /></View>
+                    <View style={styles.dateTextWrap}>
+                      <Text style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>Melhor dia de compra</Text>
+                      <Text style={[styles.dateValue, { color: colors.text }]}>Dia {bestPurchaseDay}</Text>
+                      <Text style={[styles.dateMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Mais dias para pagar</Text>
+                    </View>
+                  </View>
+                  <View style={styles.dateDivider} />
+                  <View style={styles.dateInfoRow}>
+                    <View style={styles.dateIconBox}><CreditCard size={compactScreen ? 18 : 20} color={PRIMARY} /></View>
+                    <View style={styles.dateTextWrap}>
+                      <Text style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>Dia de vencimento</Text>
+                      <Text style={[styles.dateValue, { color: colors.text }]}>Dia {dueDay}</Text>
+                      <Text style={[styles.dateMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Todo mês</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-            ))}
-          </View>
-        ) : (
-          <View
-            style={[
-              styles.emptyTransactionsCard,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Sparkles size={24} color="#6C5CE7" />
-            <Text style={[styles.emptyTxText, { color: colors.textSecondary }]}>
-              Nenhum lançamento no cartão neste período.
-            </Text>
-          </View>
+            )}
+
+            <View style={[styles.quickActionsRow, { paddingHorizontal: pagePadding, gap: compactScreen ? 8 : 12 }]}>
+              <TouchableOpacity style={styles.quickAction} onPress={() => setIsPayModalOpen(true)} activeOpacity={0.85}>
+                <FileText size={compactScreen ? 23 : 25} color={PRIMARY} />
+                <Text style={[styles.quickActionText, { color: colors.text }]}>Pagar fatura</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.quickAction} onPress={openEditCard} activeOpacity={0.85}>
+                <PieChart size={compactScreen ? 23 : 25} color={PRIMARY} />
+                <Text style={[styles.quickActionText, { color: colors.text }]}>Ajustar limite</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.quickAction} activeOpacity={0.85}>
+                <Lock size={compactScreen ? 23 : 25} color={PRIMARY} />
+                <Text style={[styles.quickActionText, { color: colors.text }]}>Bloquear cartão</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.quickAction} onPress={openEditCard} activeOpacity={0.85}>
+                <Settings size={compactScreen ? 23 : 25} color={PRIMARY} />
+                <Text style={[styles.quickActionText, { color: colors.text }]}>Configurações</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.transactionsCard, { marginHorizontal: pagePadding }]}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Últimas transações</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Statement')} activeOpacity={0.85}>
+                  <Text style={styles.viewAllText}>Ver todas</Text>
+                </TouchableOpacity>
+              </View>
+              {latestCardTransactions.length === 0 ? (
+                <Text style={[styles.noTransactionsText, { color: colors.textSecondary }]}>Nenhuma transação encontrada para este cartão.</Text>
+              ) : latestCardTransactions.map((tx, index) => (
+                <TouchableOpacity key={tx.id || `${tx.title}-${index}`} style={[styles.transactionRow, index === latestCardTransactions.length - 1 && styles.transactionRowLast]} activeOpacity={0.8}>
+                  <TransactionIcon
+                    transaction={tx}
+                    icon={tx.icon || categoriesByName.get(tx.category?.trim().toLowerCase())?.icon || 'tag'}
+                    category={tx.category}
+                    categoryColor={tx.categoryColor || categoriesByName.get(tx.category?.trim().toLowerCase())?.color}
+                    type={tx.type}
+                  />
+                  <View style={styles.transactionInfo}>
+                    <Text style={[styles.transactionTitle, { color: colors.text }]} numberOfLines={1}>{tx.title}</Text>
+                    <Text style={[styles.transactionDate, { color: colors.textSecondary }]} numberOfLines={1}>{formatCardTransactionDate(tx.date)}</Text>
+                  </View>
+                  <Text style={[styles.transactionAmount, { color: colors.text }]}>{formatCurrency(Math.abs(toFiniteNumber(tx.amount)))}</Text>
+                  <ChevronRight size={19} color={colors.text} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={[styles.tipCard, { marginHorizontal: pagePadding }]} activeOpacity={0.85}>
+              <View style={styles.tipIconBox}><Lightbulb size={26} color={PRIMARY} /></View>
+              <View style={styles.tipTextWrap}>
+                <Text style={styles.tipTitle}>Dica do Numvra</Text>
+                <Text style={[styles.tipText, { color: colors.textSecondary }]}>Concentre seus gastos no melhor dia de compra e tenha mais tempo para pagar a fatura.</Text>
+              </View>
+              <ChevronRight size={22} color={PRIMARY} />
+            </TouchableOpacity>
+          </>
         )}
       </ScrollView>
 
-      {/* Modal Pagamento de Fatura */}
-      <PayCardBillModal
-        isOpen={isPayModalOpen}
-        onClose={() => setIsPayModalOpen(false)}
-        card={activeCard}
-        onConfirm={handlePayBillConfirm}
-      />
-
-      {/* Modal Adicionar / Editar Cartão */}
-      <AddEditCardModal
-        isOpen={isAddEditModalOpen}
-        onClose={() => {
-          setIsAddEditModalOpen(false);
-          setCardToEdit(null);
-        }}
-        onSubmit={handleSaveCard}
-        cardToEdit={cardToEdit}
-      />
+      {activeCard && activeCardFinancials && (
+        <PayCardBillModal
+          isOpen={isPayModalOpen}
+          onClose={() => setIsPayModalOpen(false)}
+          card={{ ...activeCard, usedLimit: activeCardFinancials.usedLimit }}
+          onConfirm={handlePayBillConfirm}
+        />
+      )}
+      <AddEditCardModal isOpen={isAddEditModalOpen} onClose={() => setIsAddEditModalOpen(false)} onSubmit={handleSaveCard} cardToEdit={cardToEdit} />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxxl,
-    gap: spacing.lg,
-  },
-  headerFixed: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    ...typography.h3,
-  },
-  addCardHeaderBtn: {
-    padding: spacing.xs,
-  },
-  cardsOverviewSection: {
-    gap: spacing.md,
-  },
-  cardsSectionTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    marginTop: spacing.xs,
-  },
-  cardFinancialColumn: {
-    flex: 1,
-    gap: 4,
-  },
-  cardFinancialRightColumn: {
-    alignItems: 'flex-end',
-  },
-  cardFinancialLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  cardFinancialValue: {
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  cardsCarouselSection: {
-    gap: spacing.md,
-  },
-  cardsScrollTrack: {
-    gap: spacing.md,
-    paddingRight: spacing.md,
-  },
-  creditCardVisual: {
-    aspectRatio: 1.777,
-    borderRadius: 24,
-    padding: spacing.lg,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  cardVisualTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  cardVisualMain: {
-    gap: spacing.md,
-  },
-  cardInfoLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.72)',
-    textTransform: 'uppercase',
-  },
-  cardLimitAmount: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#ffffff',
-    marginTop: 2,
-  },
-  cardDigitsText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: 1.4,
-  },
-  cardVisualBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  cardHolderName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  cardFooterInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cardFooterInfoRight: {
-    alignItems: 'flex-end',
-  },
-  cardDatesRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: 2,
-  },
-  cardDateInfo: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: 'rgba(255, 255, 255, 0.75)',
-    letterSpacing: 0.4,
-  },
-  cardDateInfoStrong: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#ffffff',
-    marginTop: 2,
-  },
-  brandBadgeWrapper: {
-    justifyContent: 'center',
-  },
-  mastercardCircles: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  mcCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  brandGenericText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#ffffff',
-  },
-  cardActionsBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  cardEditActions: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  cardActionIconBtn: {
-    padding: 6,
-    borderRadius: 8,
-  },
-  emptyCardDashed: {
-    width: '100%',
-    padding: spacing.xl,
-    borderRadius: borderRadius.xl,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  emptyCardIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  emptyCardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  emptyCardSubtitle: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 16,
-    maxWidth: 260,
-  },
-  addFirstCardBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.xs,
-  },
-  addFirstCardText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  infoCardBlock: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-  },
-  infoCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  iconAndTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  headerIconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoBlockTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  infoBlockSubtitle: {
-    fontSize: 11,
-  },
-  infoCardTopRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  eyeToggleBtn: {
-    padding: 4,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  statusBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  largeAmountText: {
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  twoColsCardGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  smallStatCard: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    gap: 2,
-  },
-  smallStatLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  smallStatValue: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  cardDetailsPanel: {
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  cardDetailsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  cardDetailsRight: {
-    alignItems: 'flex-end',
-  },
-  cardDetailsLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  cardDetailsInvoiceAmount: {
-    fontSize: 24,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  cardDetailsPercent: {
-    fontSize: 14,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  cardDetailsRows: {
-    gap: spacing.sm,
-  },
-  cardDetailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  cardDetailsValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    textAlign: 'right',
-  },
-  payBillButton: {
-    width: '100%',
-    height: 48,
-    borderRadius: borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  payBillButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  limitProgressTrack: {
-    width: '100%',
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  limitProgressBar: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  detailsLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  detailsText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  transactionsList: {
-    gap: spacing.sm,
-  },
-  transactionItemCard: {
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  txLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  txIconSquare: {
-    width: 38,
-    height: 38,
-    borderRadius: borderRadius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  txTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  txSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  txDate: {
-    fontSize: 11,
-  },
-  installmentBadge: {
-    backgroundColor: 'rgba(108, 92, 231, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  installmentBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#6C5CE7',
-  },
-  txAmount: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  emptyTransactionsCard: {
-    padding: spacing.xl,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  emptyTxText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  lockedContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xxl,
-  },
-  lockedIconBox: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  lockedTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  lockedText: {
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  lockedButton: {
-    minWidth: 140,
-    height: 48,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6C5CE7',
-    paddingHorizontal: spacing.lg,
-  },
-  lockedButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
+  container: { flex: 1 },
+  scrollContent: { paddingTop: 10 },
+  header: { marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  headerTextWrap: { flex: 1, minWidth: 0 },
+  title: { fontSize: CARD_SCREEN_TYPE.screenTitle, lineHeight: 32, fontWeight: '700', letterSpacing: 0 },
+  subtitle: { marginTop: 1, fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 18, fontWeight: '400' },
+  addCardButton: { marginTop: 2, height: 42, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: '#DDDDFC', backgroundColor: '#FAFAFF', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  addCardIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: PRIMARY },
+  addCardText: { color: PRIMARY, fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 18, fontWeight: '500' },
+  loadingState: { minHeight: 280, alignItems: 'center', justifyContent: 'center' },
+  emptyState: { marginHorizontal: 18, marginTop: 24, padding: 20, borderRadius: 18, borderWidth: 1, borderColor: '#E3E5F1', alignItems: 'center', backgroundColor: '#FFFFFF' },
+  emptyTitle: { marginTop: 10, fontSize: CARD_SCREEN_TYPE.cardTitle, fontWeight: '700' },
+  emptyText: { marginTop: 4, fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 18, textAlign: 'center' },
+  lockedState: { flex: 1, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' },
+  lockedIconWrap: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#F0EEFF', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  lockedTitle: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
+  lockedText: { marginTop: 6, fontSize: CARD_SCREEN_TYPE.body, lineHeight: 20, textAlign: 'center' },
+  primaryButtonSmall: { marginTop: 14, height: 44, paddingHorizontal: 18, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: PRIMARY },
+  primaryButtonSmallText: { color: '#FFFFFF', fontSize: CARD_SCREEN_TYPE.button, fontWeight: '700' },
+  carouselItem: { aspectRatio: 1.586, marginBottom: 10 },
+  creditCardVisual: { flex: 1, borderRadius: 17, overflow: 'hidden', padding: 18, shadowColor: '#3324C7', shadowOpacity: 0.22, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 7 },
+  cardSheen: { position: 'absolute', top: -62, right: -28, width: 150, height: 230, borderRadius: 80, transform: [{ rotate: '24deg' }], backgroundColor: 'rgba(255,255,255,0.12)' },
+  cardVisualTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mainCardBadge: { maxWidth: 124, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 14, overflow: 'hidden', color: '#FFFFFF', fontSize: CARD_SCREEN_TYPE.small, lineHeight: 16, fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.16)' },
+  brandGenericText: { color: '#FFFFFF', fontSize: 24, lineHeight: 28, fontWeight: '900', fontStyle: 'italic' },
+  bankMark: { marginTop: 20, color: '#FFFFFF', fontSize: CARD_SCREEN_TYPE.cardTitle, lineHeight: 20, fontWeight: '900', letterSpacing: 0 },
+  cardDigitsRow: { marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardDigitsText: { color: '#FFFFFF', fontSize: 18, lineHeight: 23, fontWeight: '700' },
+  cardChip: { width: 39, height: 29, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', backgroundColor: 'rgba(255,255,255,0.5)', justifyContent: 'space-evenly', paddingHorizontal: 5 },
+  chipLine: { height: 1, backgroundColor: 'rgba(255,255,255,0.55)' },
+  cardHolderName: { marginTop: 'auto', color: '#FFFFFF', fontSize: CARD_SCREEN_TYPE.small, lineHeight: 16, fontWeight: '600' },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, marginTop: 0, marginBottom: 14 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E3E4F3' },
+  dotActive: { width: 9, height: 9, borderRadius: 5, backgroundColor: PRIMARY },
+  tabsRow: { gap: 8, paddingBottom: 12 },
+  tabPill: { height: 44, minWidth: 88, paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#F6F7FC', alignItems: 'center', justifyContent: 'center' },
+  tabPillActive: { backgroundColor: PRIMARY, shadowColor: '#3B2DDB', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
+  tabText: { color: '#6F7894', fontSize: CARD_SCREEN_TYPE.small, lineHeight: 16, fontWeight: '500' },
+  tabTextActive: { color: '#FFFFFF', fontWeight: '600' },
+  summaryCard: { marginHorizontal: 18, borderRadius: 17, borderWidth: 1, borderColor: '#E5E7F3', backgroundColor: '#FFFFFF', padding: 13, flexDirection: 'row', gap: 8, shadowColor: '#8792B4', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 7 }, elevation: 3 },
+  invoiceColumn: { flex: 0.98, minWidth: 0 },
+  sectionOverline: { color: '#111733', fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 17, fontWeight: '500', marginBottom: 4 },
+  invoiceAmount: { fontSize: CARD_SCREEN_TYPE.financialValue, lineHeight: 32, fontWeight: '700' },
+  invoiceDue: { fontSize: CARD_SCREEN_TYPE.small, lineHeight: 16, fontWeight: '400' },
+  progressTrack: { marginTop: 8, height: 7, borderRadius: 7, overflow: 'hidden', backgroundColor: '#ECEEF6' },
+  progressFill: { height: '100%', borderRadius: 7, backgroundColor: PRIMARY },
+  limitsRow: { marginTop: 12, flexDirection: 'row', alignItems: 'stretch' },
+  limitBlock: { flex: 1, minWidth: 0 },
+  limitLabel: { fontSize: CARD_SCREEN_TYPE.caption, lineHeight: 14, fontWeight: '400' },
+  limitValue: { marginTop: 3, fontSize: CARD_SCREEN_TYPE.cardTitle, lineHeight: 20, fontWeight: '700' },
+  limitMeta: { flex: 1, marginTop: 1, fontSize: CARD_SCREEN_TYPE.caption, lineHeight: 14, fontWeight: '400' },
+  limitMetaRow: { minHeight: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  usedPercent: { marginTop: 1, color: PRIMARY, fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 17, fontWeight: '700' },
+  availablePercent: { marginTop: 1, color: '#14B85A', fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 17, fontWeight: '700' },
+  verticalDivider: { width: 1, marginHorizontal: 8, backgroundColor: '#E2E5F0' },
+  dateColumn: { flex: 1.02, borderLeftWidth: 1, borderLeftColor: '#E4E7F2', paddingLeft: 9, justifyContent: 'center' },
+  dateInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  dateIconBox: { width: 38, height: 38, borderRadius: 11, backgroundColor: '#F2F1FF', alignItems: 'center', justifyContent: 'center' },
+  dateTextWrap: { flex: 1, minWidth: 0 },
+  dateLabel: { fontSize: CARD_SCREEN_TYPE.caption, lineHeight: 14, fontWeight: '400' },
+  dateValue: { marginTop: 1, fontSize: CARD_SCREEN_TYPE.cardTitle, lineHeight: 20, fontWeight: '700' },
+  dateMeta: { marginTop: 1, fontSize: CARD_SCREEN_TYPE.caption, lineHeight: 14, fontWeight: '400' },
+  dateDivider: { height: 1, backgroundColor: '#E4E7F2', marginVertical: 13 },
+  quickActionsRow: { paddingHorizontal: 18, marginTop: 14, flexDirection: 'row', gap: 12 },
+  quickAction: { flex: 1, height: 76, borderRadius: 14, backgroundColor: '#F8F8FD', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  quickActionText: { fontSize: CARD_SCREEN_TYPE.small, lineHeight: 16, fontWeight: '500', textAlign: 'center' },
+  transactionsCard: { marginHorizontal: 18, marginTop: 14, borderRadius: 17, borderWidth: 1, borderColor: '#E5E7F3', backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, shadowColor: '#8792B4', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 7 }, elevation: 2 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  sectionTitle: { fontSize: CARD_SCREEN_TYPE.sectionTitle, lineHeight: 23, fontWeight: '700' },
+  viewAllText: { color: PRIMARY, fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 17, fontWeight: '500' },
+  noTransactionsText: { paddingVertical: 16, fontSize: CARD_SCREEN_TYPE.secondary, lineHeight: 18, textAlign: 'center' },
+  transactionRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#EEF0F7', gap: 10 },
+  transactionRowLast: { borderBottomWidth: 0 },
+  transactionIconBox: { width: 45, height: 45, borderRadius: 12, backgroundColor: '#F4F5FA', alignItems: 'center', justifyContent: 'center' },
+  transactionInfo: { flex: 1, minWidth: 0 },
+  transactionTitle: { fontSize: CARD_SCREEN_TYPE.body, lineHeight: 18, fontWeight: '600' },
+  transactionDate: { marginTop: 1, fontSize: CARD_SCREEN_TYPE.small, lineHeight: 16, fontWeight: '400' },
+  transactionAmount: { minWidth: 82, textAlign: 'right', fontSize: CARD_SCREEN_TYPE.body, lineHeight: 18, fontWeight: '600' },
+  tipCard: { marginHorizontal: 18, marginTop: 18, minHeight: 76, borderRadius: 17, backgroundColor: '#F2F0FF', paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tipIconBox: { width: 48, height: 48, borderRadius: 15, backgroundColor: '#ECE9FF', alignItems: 'center', justifyContent: 'center' },
+  tipTextWrap: { flex: 1, minWidth: 0 },
+  tipTitle: { color: PRIMARY, fontSize: CARD_SCREEN_TYPE.body, lineHeight: 18, fontWeight: '600' },
+  tipText: { marginTop: 2, fontSize: CARD_SCREEN_TYPE.small, lineHeight: 16, fontWeight: '400' },
 });

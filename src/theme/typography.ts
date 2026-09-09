@@ -1,4 +1,4 @@
-﻿import { Platform, TextStyle } from 'react-native';
+import { Platform, TextStyle } from 'react-native';
 
 export const fontFamilies = {
   regular: 'Inter-Regular',
@@ -7,7 +7,16 @@ export const fontFamilies = {
   bold: 'Inter-Bold',
 } as const;
 
+export const iconSizes = {
+  xs: 14,
+  sm: 16,
+  md: 20,
+  lg: 24,
+  xl: 28,
+} as const;
+
 export type FontWeightToken = keyof typeof fontFamilies;
+export type IconSizeToken = keyof typeof iconSizes;
 
 export const fontForWeight = (weight?: TextStyle['fontWeight']) => {
   const normalized = String(weight || '400');
@@ -27,56 +36,56 @@ export const withFont = (style: TextStyle, family: FontWeightToken = 'regular') 
 
 export const typography = {
   h1: withFont({
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 24,
+    lineHeight: 30,
   }, 'bold') as TextStyle,
   h2: withFont({
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 26,
   }, 'bold') as TextStyle,
   h3: withFont({
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 16,
+    lineHeight: 22,
   }, 'semibold') as TextStyle,
   bodyLarge: withFont({
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 21,
   }) as TextStyle,
   bodyMedium: withFont({
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
   }) as TextStyle,
   bodySmall: withFont({
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
   }) as TextStyle,
   caption: withFont({
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 10,
+    lineHeight: 13,
   }, 'medium') as TextStyle,
   label: withFont({
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
   }, 'semibold') as TextStyle,
   button: withFont({
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 18,
   }, 'semibold') as TextStyle,
   subtitle: withFont({
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 21,
   }, 'semibold') as TextStyle,
   title: withFont({
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 16,
+    lineHeight: 22,
   }, 'bold') as TextStyle,
   heading: withFont({
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 26,
   }, 'bold') as TextStyle,
   amount: withFont({
-    fontSize: 18,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 20,
   }, 'semibold') as TextStyle,
 };
 

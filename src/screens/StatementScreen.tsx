@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -20,8 +21,12 @@ import {
   Search,
   X,
   Calendar as CalendarIcon,
-  Pencil,
   Check,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronRight,
+  BarChart3,
+  Lightbulb,
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -36,19 +41,61 @@ import { CalendarPicker, ModalBottomSheet } from '../components/common';
 import { getCategoryVisual } from '../constants/iconRegistry';
 import { useBudgets } from '../hooks/useBudgets';
 import { RootStackParamList } from '../navigation/types';
-import { formatBrazilianDate } from '../utils/dateFormat';
+import {
+  formatBrazilianDate,
+  formatStatementGroupDate,
+  formatStatementMonthLabel,
+  getDatePartsWithoutTimezoneShift,
+} from '../utils/dateFormat';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type StatementSection = 'transactions' | 'subscriptions' | 'goals';
-type TransactionFilter = 'all' | 'income' | 'expense' | 'subscriptions' | 'card';
+type TransactionFilter = 'all' | 'income' | 'expense' | 'transfer';
+type SubscriptionStatusFilter = 'active' | 'canceled';
 
 const transactionFilters: { key: TransactionFilter; label: string }[] = [
-  { key: 'all', label: 'Todos' },
+  { key: 'all', label: 'Todas' },
   { key: 'income', label: 'Receitas' },
   { key: 'expense', label: 'Despesas' },
-  { key: 'subscriptions', label: 'Assinaturas' },
-  { key: 'card', label: 'Cartão' },
+  { key: 'transfer', label: 'Transferências' },
 ];
+
+const STATEMENT_TYPE = {
+  caption: 11,
+  small: 12,
+  secondary: 13,
+  body: 14,
+  medium: 15,
+  sectionTitle: 18,
+  screenTitle: 28,
+};
+const PRIMARY = '#5748FF';
+const INCOME = '#10B981';
+const EXPENSE = '#EF123A';
+const getPagePadding = (width: number) => width < 360 ? 16 : width < 400 ? 18 : 22;
+const formatCurrency = (value: number) => `R$ ${Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const isTransferTransaction = (transaction: Transaction) => {
+  const tx = transaction as Transaction & { transferId?: string; transferGroupId?: string; transferType?: string };
+  return (tx.type as string) === 'transfer' || tx.paymentMethod === 'transfer' || !!tx.transferId || !!tx.transferGroupId || tx.transferType === 'transfer';
+};
+const getTransactionDateKey = (value?: string | Date | null) => {
+  const parts = getDatePartsWithoutTimezoneShift(value);
+  if (!parts) return '';
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+};
+const isSameStatementMonth = (value: string, month: Date) => {
+  const parts = getDatePartsWithoutTimezoneShift(value);
+  return !!parts && parts.month === month.getMonth() + 1 && parts.year === month.getFullYear();
+};
+const getTransactionTimeLabel = (transaction: Transaction) => {
+  const raw = transaction.date || '';
+  const timeMatch = raw.match(/(?:T|\s)(\d{2}):(\d{2})/);
+  if (timeMatch) return `${timeMatch[1]}:${timeMatch[2]}`;
+  const ms = getTransactionTimestamp(transaction);
+  if (!ms) return '';
+  const date = new Date(ms);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
 
 const normalizeSearch = (value?: string | null) => (value || '')
   .normalize('NFD')
@@ -59,15 +106,26 @@ const normalizeSearch = (value?: string | null) => (value || '')
 const transactionMatchesFilter = (transaction: Transaction, filter: TransactionFilter) => {
   if (filter === 'all') return true;
   if (filter === 'income') return transaction.type === 'income';
-  if (filter === 'expense') return transaction.type === 'expense' && !transaction.isCardCharge;
-  if (filter === 'subscriptions') {
-    return transaction.isRecurring === true || normalizeSearch(transaction.category) === 'assinaturas';
-  }
-  if (filter === 'card') {
-    return transaction.isCardCharge === true || !!transaction.cardId || transaction.paymentMethod === 'credit_card';
-  }
+  if (filter === 'expense') return transaction.type === 'expense' && !isTransferTransaction(transaction);
+  if (filter === 'transfer') return isTransferTransaction(transaction);
   return true;
 };
+
+const getSubscriptionStatus = (subscription: Subscription): SubscriptionStatusFilter =>
+  subscription.status === 'canceled' ? 'canceled' : 'active';
+
+const getSubscriptionCycleLabel = (subscription: Subscription) => subscription.period || 'Mensal';
+
+const getMonthlyEquivalent = (subscription: Subscription) => {
+  const amount = Number(subscription.amount) || 0;
+  const period = getSubscriptionCycleLabel(subscription);
+  if (period === 'Anual') return amount / 12;
+  if (period === 'Semestral') return amount / 6;
+  if (period === 'Trimestral') return amount / 3;
+  return amount;
+};
+
+const getAnnualEquivalent = (subscription: Subscription) => getMonthlyEquivalent(subscription) * 12;
 
 const transactionMatchesSearch = (transaction: Transaction, query: string) => {
   const normalizedQuery = normalizeSearch(query);
@@ -79,6 +137,8 @@ const transactionMatchesSearch = (transaction: Transaction, query: string) => {
     transaction.category,
     transaction.cardName,
     transaction.paymentMethod,
+    (transaction as Transaction & { merchant?: string; establishment?: string }).merchant,
+    (transaction as Transaction & { merchant?: string; establishment?: string }).establishment,
   ];
 
   return fields.some((field) => normalizeSearch(field).includes(normalizedQuery));
@@ -126,6 +186,7 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
   const insets = useSafeAreaInsets();
   const { user, checkLimit, triggerUpgrade } = useAuth();
   const { colors, isDarkMode } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const { budgetCategories } = useBudgets();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -134,11 +195,14 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
   const [loading, setLoading] = useState(true);
   const [transactionSearch, setTransactionSearch] = useState('');
   const [transactionFilter, setTransactionFilter] = useState<TransactionFilter>('all');
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date());
+  const [isStatementMonthPickerOpen, setIsStatementMonthPickerOpen] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [editSubscriptionAmountRaw, setEditSubscriptionAmountRaw] = useState('');
   const [editSubscriptionDate, setEditSubscriptionDate] = useState(new Date());
   const [isEditSubscriptionCalendarOpen, setIsEditSubscriptionCalendarOpen] = useState(false);
   const [isSavingSubscription, setIsSavingSubscription] = useState(false);
+  const [subscriptionStatusFilter, setSubscriptionStatusFilter] = useState<SubscriptionStatusFilter>('active');
 
   useEffect(() => {
     if (!user) return;
@@ -287,16 +351,27 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
     );
   };
 
-  const { totalMonthlySubs, totalYearlySubs } = useMemo(
-    () => ({
-      totalMonthlySubs: subscriptions
-        .filter((s) => s.period === 'Mensal')
-        .reduce((acc, s) => acc + s.amount, 0),
-      totalYearlySubs: subscriptions
-        .filter((s) => s.period === 'Anual')
-        .reduce((acc, s) => acc + s.amount, 0),
-    }),
+  const activeSubscriptions = useMemo(
+    () => subscriptions.filter((subscription) => getSubscriptionStatus(subscription) === 'active'),
     [subscriptions]
+  );
+
+  const canceledSubscriptions = useMemo(
+    () => subscriptions.filter((subscription) => getSubscriptionStatus(subscription) === 'canceled'),
+    [subscriptions]
+  );
+
+  const visibleSubscriptions = subscriptionStatusFilter === 'active' ? activeSubscriptions : canceledSubscriptions;
+
+  const { totalMonthlySubs, totalYearlySubs } = useMemo(
+    () => activeSubscriptions.reduce(
+      (totals, subscription) => ({
+        totalMonthlySubs: totals.totalMonthlySubs + getMonthlyEquivalent(subscription),
+        totalYearlySubs: totals.totalYearlySubs + getAnnualEquivalent(subscription),
+      }),
+      { totalMonthlySubs: 0, totalYearlySubs: 0 }
+    ),
+    [activeSubscriptions]
   );
 
   const categoriesByName = useMemo(
@@ -321,10 +396,35 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
   const visibleTransactions = useMemo(
     () => sortedTransactions.filter((transaction) =>
       transactionMatchesFilter(transaction, transactionFilter) &&
-      transactionMatchesSearch(transaction, transactionSearch)
+      transactionMatchesSearch(transaction, transactionSearch) &&
+      isSameStatementMonth(transaction.date, selectedMonth)
     ),
-    [sortedTransactions, transactionFilter, transactionSearch]
+    [sortedTransactions, transactionFilter, transactionSearch, selectedMonth]
   );
+
+  const transactionGroups = useMemo(() => {
+    const grouped = new Map<string, { date: string; total: number; data: Transaction[] }>();
+    visibleTransactions.forEach((transaction) => {
+      const key = getTransactionDateKey(transaction.date);
+      if (!key) return;
+      const current = grouped.get(key) || { date: transaction.date, total: 0, data: [] };
+      current.total += transaction.type === 'income' ? Math.abs(transaction.amount) : -Math.abs(transaction.amount);
+      current.data.push(transaction);
+      grouped.set(key, current);
+    });
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([, group]) => ({ ...group, data: group.data.sort((a, b) => getTransactionTimestamp(b) - getTransactionTimestamp(a)) }));
+  }, [visibleTransactions]);
+
+  const statementPagePadding = getPagePadding(screenWidth);
+  const compactStatement = screenWidth < 360;
+
+  const cycleTransactionFilter = () => {
+    const currentIndex = transactionFilters.findIndex((filter) => filter.key === transactionFilter);
+    const next = transactionFilters[(currentIndex + 1) % transactionFilters.length];
+    setTransactionFilter(next.key);
+  };
 
   return (
     <View
@@ -334,37 +434,49 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
       ]}
     >
       {/* Top Title */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
-        {section !== 'transactions' && (
-          <View style={styles.headerBackButton}>
-            <BackButton onPress={() => navigation.goBack()} />
+      {section === 'transactions' ? (
+        <View style={[styles.statementHeader, { paddingTop: Math.max(insets.top, 16) + 12, paddingHorizontal: statementPagePadding }]}>
+          <View style={styles.statementHeaderRow}>
+            <View style={styles.statementTitleWrap}>
+              <Text style={[styles.statementTitle, { color: colors.text }]} maxFontSizeMultiplier={1.15}>Extrato</Text>
+              <Text style={[styles.statementSubtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.2}>Acompanhe todas as suas movimentações.</Text>
+            </View>
+            <TouchableOpacity onPress={() => setIsStatementMonthPickerOpen(true)} style={[styles.monthSelector, compactStatement && styles.monthSelectorCompact]} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Selecionar mês do extrato">
+              <CalendarIcon size={compactStatement ? 19 : 21} color={PRIMARY} />
+              <Text style={styles.monthSelectorText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{formatStatementMonthLabel(selectedMonth)}</Text>
+              <ChevronDown size={19} color="#6F7894" />
+            </TouchableOpacity>
           </View>
-        )}
-        <Text
-          style={[
-            styles.headerTitle,
-            { color: isDarkMode ? '#F8FAFC' : '#1C1C28' },
-          ]}
-        >
-          {section === 'transactions' ? 'Extrato' : section === 'subscriptions' ? 'Assinaturas' : 'Metas'}
-        </Text>
-        {section !== 'transactions' && (
-          <TouchableOpacity
-            onPress={section === 'subscriptions' ? handleCreateSubscription : handleCreateGoal}
-            style={[styles.headerActionButton, { backgroundColor: colors.primary }]}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={section === 'subscriptions' ? 'Criar nova assinatura' : 'Criar nova meta'}
-          >
+        </View>
+      ) : section === 'subscriptions' ? (
+        <View style={[styles.subscriptionsHeader, { paddingTop: Math.max(insets.top, 16) + 12, paddingHorizontal: statementPagePadding }]}>
+          <View style={styles.subscriptionsHeaderRow}>
+            <BackButton onPress={() => navigation.goBack()} />
+            <TouchableOpacity onPress={handleCreateSubscription} style={styles.subscriptionsAddTopButton} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Criar nova assinatura">
+              <Plus size={25} color={PRIMARY} strokeWidth={2.4} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.subscriptionsTitleBlock}>
+            <Text style={[styles.subscriptionsTitle, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.84}>Assinaturas</Text>
+            <Text style={[styles.subscriptionsSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>Gerencie suas assinaturas recorrentes.</Text>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
+          <View style={styles.headerBackButton}><BackButton onPress={() => navigation.goBack()} /></View>
+          <Text style={[styles.headerTitle, { color: isDarkMode ? '#F8FAFC' : '#1C1C28' }]}>Metas</Text>
+          <TouchableOpacity onPress={handleCreateGoal} style={[styles.headerActionButton, { backgroundColor: colors.primary }]} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Criar nova meta">
             <Plus size={20} color="#ffffff" strokeWidth={3} />
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Content */}
       <ScrollView
         contentContainerStyle={[
-          styles.scrollContent,
+          section === 'transactions' ? styles.statementScrollContent : styles.scrollContent,
+          section === 'transactions' && { paddingBottom: Math.max(insets.bottom, 12) + 108 },
+          section === 'subscriptions' && { paddingBottom: Math.max(insets.bottom, 12) + 118, paddingHorizontal: statementPagePadding, paddingTop: 0 },
           section === 'goals' && { paddingBottom: Math.max(insets.bottom, 12) + 118 },
         ]}
         showsVerticalScrollIndicator={false}
@@ -374,225 +486,152 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
             <ActivityIndicator size="large" color="#6C5CE7" />
           </View>
         ) : section === 'transactions' ? (
-          <View style={styles.tabContent}>
-            <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Search size={18} color={colors.textMuted} />
-              <TextInput
-                value={transactionSearch}
-                onChangeText={setTransactionSearch}
-                placeholder="Pesquisar lançamento"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.searchInput, { color: colors.text }]}
-                autoCapitalize="none"
-                autoCorrect={false}
-                accessibilityLabel="Pesquisar lançamentos"
-              />
-              {!!transactionSearch && (
-                <TouchableOpacity onPress={() => setTransactionSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <X size={16} color={colors.textMuted} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
+          <View style={[styles.statementContent, { paddingHorizontal: statementPagePadding }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeFiltersRow}>
               {transactionFilters.map((filter) => {
                 const selected = transactionFilter === filter.key;
                 return (
-                  <TouchableOpacity
-                    key={filter.key}
-                    onPress={() => setTransactionFilter(filter.key)}
-                    style={[
-                      styles.filterChip,
-                      {
-                        backgroundColor: selected ? colors.primary : colors.card,
-                        borderColor: selected ? colors.primary : colors.border,
-                      },
-                    ]}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.filterChipText, { color: selected ? '#ffffff' : colors.textSecondary }]}>
-                      {filter.label}
-                    </Text>
+                  <TouchableOpacity key={filter.key} onPress={() => setTransactionFilter(filter.key)} style={[styles.typeFilterChip, selected && styles.typeFilterChipActive]} activeOpacity={0.85}>
+                    <Text style={[styles.typeFilterText, selected && styles.typeFilterTextActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{filter.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-
-            {visibleTransactions.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Nenhum lançamento encontrado.</Text>
+            <View style={styles.searchFilterRow}>
+              <View style={styles.statementSearchBar}>
+                <Search size={22} color="#6F7894" />
+                <TextInput value={transactionSearch} onChangeText={setTransactionSearch} placeholder="Buscar transações..." placeholderTextColor="#8A93AC" style={styles.statementSearchInput} autoCapitalize="none" autoCorrect={false} accessibilityLabel="Buscar transações" />
+                {!!transactionSearch && <TouchableOpacity onPress={() => setTransactionSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><X size={16} color="#8A93AC" /></TouchableOpacity>}
               </View>
-            ) : (
-              visibleTransactions.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.txCard,
-                    {
-                      backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF',
-                      borderColor: isDarkMode ? '#2D2D3A' : '#F1F1F5',
-                    },
-                  ]}
-                >
-                  <View style={styles.txLeft}>
-                    <TransactionIcon
-                      icon={item.icon || categoriesByName.get(item.category?.trim().toLowerCase())?.icon || 'tag'}
-                      category={item.category}
-                      categoryColor={item.categoryColor || categoriesByName.get(item.category?.trim().toLowerCase())?.color}
-                      type={item.type}
-                    />
-                    <View style={styles.txInfo}>
-                      <Text
-                        style={[
-                          styles.txTitle,
-                          { color: isDarkMode ? '#F8FAFC' : '#111827' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.title}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.txSubtitle,
-                          { color: isDarkMode ? '#94A3B8' : '#6B7280' },
-                        ]}
-                      >
-                        {formatBrazilianDate(item.date, 'Hoje')} • {item.category}
-                      </Text>
-                    </View>
+              <TouchableOpacity style={styles.advancedFilterButton} onPress={cycleTransactionFilter} activeOpacity={0.85}>
+                <SlidersHorizontal size={22} color="#596174" />
+                <Text style={styles.advancedFilterText}>Filtros</Text>
+              </TouchableOpacity>
+            </View>
+            {transactionGroups.length === 0 ? (
+              <View style={styles.statementEmptyContainer}>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>{transactionSearch || transactionFilter !== 'all' ? 'Nenhuma transação encontrada' : 'Nenhuma movimentação encontrada'}</Text>
+                <Text style={[styles.statementEmptySubtext, { color: colors.textSecondary }]}>{transactionSearch || transactionFilter !== 'all' ? 'Tente alterar sua busca ou seus filtros.' : 'Suas receitas e despesas aparecerão aqui.'}</Text>
+              </View>
+            ) : transactionGroups.map((group) => {
+              const dayPositive = group.total >= 0;
+              return (
+                <View key={getTransactionDateKey(group.date)} style={styles.dayGroup}>
+                  <View style={styles.dayHeader}>
+                    <Text style={[styles.dayTitle, { color: colors.text }]} numberOfLines={1}>{formatStatementGroupDate(group.date)}</Text>
+                    <Text style={[styles.dayTotal, { color: group.total === 0 ? colors.textSecondary : dayPositive ? INCOME : EXPENSE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>{dayPositive ? '' : '- '}{formatCurrency(group.total)}</Text>
                   </View>
-
-                  <View style={styles.txRight}>
-                    <Text
-                      style={[
-                        styles.txAmount,
-                        {
-                          color: item.amount > 0 ? '#10B981' : '#EF4444',
-                        },
-                      ]}
-                    >
-                      {item.amount > 0 ? '+' : '-'} R${' '}
-                      {Math.abs(item.amount).toFixed(2).replace('.', ',')}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteTransaction(item)}
-                      style={styles.deleteIconButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Trash2 size={16} color={isDarkMode ? '#64748B' : '#9CA3AF'} />
-                    </TouchableOpacity>
+                  <View style={styles.dayTransactionsList}>
+                    {group.data.map((item) => {
+                      const category = item.type === 'income' ? 'Receita' : item.category;
+                      const positive = item.type === 'income';
+                      const categoryVisual = positive ? { color: INCOME, backgroundColor: '#E7F8EF' } : { color: '#E43A57', backgroundColor: '#FDE7EC' };
+                      return (
+                        <TouchableOpacity key={item.id} style={[styles.statementTxCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF', borderColor: isDarkMode ? '#2D2D3A' : '#E9ECF5' }]} activeOpacity={0.85} onPress={() => navigation.navigate('TransactionDetail', { transactionId: item.id })} onLongPress={() => handleDeleteTransaction(item)}>
+                          <View style={styles.statementTxLeft}>
+                            <TransactionIcon transaction={item} icon={item.icon || categoriesByName.get(item.category?.trim().toLowerCase())?.icon || 'tag'} category={item.category} categoryColor={item.categoryColor || categoriesByName.get(item.category?.trim().toLowerCase())?.color} type={item.type} />
+                            <View style={styles.statementTxInfo}>
+                              <Text style={[styles.statementTxTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                              <Text style={[styles.statementTxDescription, { color: colors.textSecondary }]} numberOfLines={1}>{item.description || item.cardName || item.category}</Text>
+                              <Text style={[styles.statementTxTime, { color: colors.textSecondary }]} numberOfLines={1}>{getTransactionTimeLabel(item)}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.statementTxRight}>
+                            <View style={styles.statementTxRightContent}>
+                              <Text style={[styles.statementTxAmount, { color: positive ? INCOME : EXPENSE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>{positive ? '+ ' : '- '}{formatCurrency(item.amount)}</Text>
+                              <View style={[styles.categoryBadge, { backgroundColor: categoryVisual.backgroundColor }]}><Text style={[styles.categoryBadgeText, { color: categoryVisual.color }]} numberOfLines={1}>{category}</Text></View>
+                            </View>
+                            <ChevronRight size={20} color="#6F7894" />
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
-              ))
-            )}
+              );
+            })}
           </View>
         ) : section === 'subscriptions' ? (
-          <View style={styles.tabContent}>
-            {/* Total */}
-            <View style={styles.subsSummary}>
-              <Text style={[styles.subsLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Seu pagamento mensal de assinaturas
-              </Text>
-              <Text
-                style={[
-                  styles.subsTotal,
-                  { color: isDarkMode ? '#F8FAFC' : '#1C1C28' },
-                ]}
-              >
-                R$ {totalMonthlySubs.toFixed(2).replace('.', ',')}
-              </Text>
-              <Text style={[styles.subsYearly, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-                Total Anual: R$ {totalYearlySubs.toFixed(2).replace('.', ',')}
-              </Text>
+          <View style={styles.subscriptionsContent}>
+            <View style={styles.subscriptionTabs}>
+              {(['active', 'canceled'] as SubscriptionStatusFilter[]).map((tab) => {
+                const selected = subscriptionStatusFilter === tab;
+                return (
+                  <TouchableOpacity key={tab} onPress={() => setSubscriptionStatusFilter(tab)} style={styles.subscriptionTabButton} activeOpacity={0.82}>
+                    <Text style={[styles.subscriptionTabText, selected && styles.subscriptionTabTextActive]}>{tab === 'active' ? 'Ativas' : 'Canceladas'}</Text>
+                    <View style={[styles.subscriptionTabLine, selected && styles.subscriptionTabLineActive]} />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            {subscriptions.map((sub) => (
-              <View
-                key={sub.id}
-                style={[
-                  styles.subCard,
-                  {
-                    backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF',
-                    borderColor: isDarkMode ? '#2D2D3A' : '#F1F1F5',
-                  },
-                ]}
-              >
-                <View style={styles.subHeader}>
-                  <View style={styles.subIdentity}>
-                    {(() => {
-                      const visual = getCategoryVisual(sub.icon, sub.color, isDarkMode);
-                      const FallbackIcon = visual.Icon;
-                      return (
-                        <View style={[styles.subIconBox, { backgroundColor: visual.backgroundColor }]}>
-                          <RemoteIcon
-                            uri={sub.iconUrl || sub.icon}
-                            size={28}
-                            fallback={<FallbackIcon size={22} color={visual.color} />}
-                          />
-                        </View>
-                      );
-                    })()}
-                    <View style={styles.subTitleRow}>
-                      <Text
-                        style={[
-                          styles.subName,
-                          { color: isDarkMode ? '#F8FAFC' : '#111827' },
-                        ]}
-                      >
-                        {sub.name}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.subBilling,
-                          { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                        ]}
-                      >
-                        Cobrança: {formatBrazilianDate(sub.nextBilling, '15/05/' + new Date().getFullYear())}
-                      </Text>
+            <View style={styles.subsSummaryCard}>
+              <View style={styles.subsSummaryIconBox}>
+                <BarChart3 size={31} color={PRIMARY} strokeWidth={2.5} />
+              </View>
+              <View style={styles.subsSummaryCopy}>
+                <Text style={styles.subsSummaryLabel}>Seu gasto mensal de assinaturas</Text>
+                <Text style={styles.subsSummaryTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>{formatCurrency(totalMonthlySubs)}</Text>
+                <Text style={styles.subsSummaryYearly} numberOfLines={1}>Valor anual: <Text style={styles.subsSummaryYearlyStrong}>{formatCurrency(totalYearlySubs)}</Text></Text>
+              </View>
+              <View style={styles.subsSummaryNeutralBadge}>
+                <Text style={styles.subsSummaryNeutralText}>Sem histórico</Text>
+                <Text style={styles.subsSummaryNeutralSubtext}>mês anterior</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity onPress={handleCreateSubscription} style={styles.addSubscriptionButton} activeOpacity={0.86} accessibilityRole="button" accessibilityLabel="Adicionar assinatura">
+              <Plus size={31} color="#FFFFFF" strokeWidth={2.2} />
+              <Text style={styles.addSubscriptionButtonText}>Adicionar Assinatura</Text>
+            </TouchableOpacity>
+
+            {visibleSubscriptions.length === 0 ? (
+              <View style={styles.subscriptionsEmptyCard}>
+                <Text style={styles.subscriptionsEmptyTitle}>{subscriptionStatusFilter === 'active' ? 'Nenhuma assinatura ativa' : 'Nenhuma assinatura cancelada.'}</Text>
+                {subscriptionStatusFilter === 'active' && <Text style={styles.subscriptionsEmptySubtitle}>Adicione suas assinaturas para acompanhar seus gastos recorrentes.</Text>}
+                {subscriptionStatusFilter === 'active' && (
+                  <TouchableOpacity onPress={handleCreateSubscription} style={styles.subscriptionsEmptyButton} activeOpacity={0.82}>
+                    <Text style={styles.subscriptionsEmptyButtonText}>Adicionar assinatura</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : visibleSubscriptions.map((sub) => {
+              const visual = getCategoryVisual(sub.icon, sub.color, isDarkMode);
+              const FallbackIcon = visual.Icon;
+              const nextBilling = formatBrazilianDate(sub.nextBilling || sub.renewalDate, '--/--/----');
+              return (
+                <TouchableOpacity
+                  key={sub.id}
+                  style={[styles.subscriptionListCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF', borderColor: isDarkMode ? '#2D2D3A' : '#E8EBF4' }]}
+                  onPress={() => handleEditSubscription(sub)}
+                  onLongPress={() => handleDeleteSubscription(sub)}
+                  activeOpacity={0.86}
+                >
+                  <View style={[styles.subscriptionLogoBox, { backgroundColor: visual.backgroundColor }]}>
+                    <RemoteIcon uri={sub.iconUrl || sub.icon} size={38} fallback={<FallbackIcon size={27} color={visual.color} />} />
+                  </View>
+                  <View style={styles.subscriptionCardCopy}>
+                    <Text style={[styles.subscriptionCardName, { color: colors.text }]} numberOfLines={1}>{sub.name}</Text>
+                    <View style={styles.subscriptionAmountRow}>
+                      <Text style={[styles.subscriptionCardAmount, { color: colors.text }]} numberOfLines={1}>{formatCurrency(sub.amount)}</Text>
+                      <Text style={styles.subscriptionCardPeriod} numberOfLines={1}>/ {getSubscriptionCycleLabel(sub)}</Text>
                     </View>
+                    <Text style={styles.subscriptionCardDate} numberOfLines={1}>Próxima cobrança: {nextBilling}</Text>
                   </View>
-                  <View style={styles.subActions}>
-                    <TouchableOpacity
-                      onPress={() => handleEditSubscription(sub)}
-                      style={styles.subIconButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Editar assinatura"
-                    >
-                      <Pencil size={17} color={isDarkMode ? '#CBD5E1' : '#64748B'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteSubscription(sub)}
-                      style={styles.subIconButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Excluir assinatura"
-                    >
-                      <Trash2 size={18} color={isDarkMode ? '#64748B' : '#9CA3AF'} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                  <ChevronRight size={22} color="#10152F" strokeWidth={2.5} />
+                </TouchableOpacity>
+              );
+            })}
 
-                <View style={styles.subFooter}>
-                  <Text
-                    style={[
-                      styles.subAmount,
-                      { color: isDarkMode ? '#F8FAFC' : '#111827' },
-                    ]}
-                  >
-                    R$ {sub.amount.toFixed(2).replace('.', ',')}{' '}
-                    <Text style={styles.subPeriod}>/ {sub.period}</Text>
-                  </Text>
-                </View>
+            <View style={styles.subscriptionTipCard}>
+              <View style={styles.subscriptionTipIcon}>
+                <Lightbulb size={28} color={PRIMARY} strokeWidth={2.2} />
               </View>
-            ))}
-
-
-            {subscriptions.length === 0 && (
-              <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Nenhuma assinatura cadastrada.</Text>
+              <View style={styles.subscriptionTipCopy}>
+                <Text style={styles.subscriptionTipTitle}>Dica do Numvra</Text>
+                <Text style={styles.subscriptionTipText}>Revise suas assinaturas regularmente e cancele o que não usa mais. Isso pode gerar uma grande economia!</Text>
               </View>
-            )}
+            </View>
           </View>
         ) : (
           <View style={styles.tabContent}>
@@ -746,6 +785,16 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
       </ModalBottomSheet>
 
       <CalendarPicker
+        isOpen={isStatementMonthPickerOpen}
+        onClose={() => setIsStatementMonthPickerOpen(false)}
+        selectedDate={selectedMonth}
+        onSelect={(date) => {
+          setSelectedMonth(date);
+          setIsStatementMonthPickerOpen(false);
+        }}
+      />
+
+      <CalendarPicker
         isOpen={isEditSubscriptionCalendarOpen}
         onClose={() => setIsEditSubscriptionCalendarOpen(false)}
         selectedDate={editSubscriptionDate}
@@ -790,6 +839,249 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+  },
+  statementScrollContent: {
+    paddingTop: 0,
+    paddingBottom: 108,
+  },
+  statementHeader: {
+    paddingBottom: 18,
+  },
+  statementHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  statementTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+    paddingTop: 2,
+  },
+  statementTitle: {
+    fontSize: STATEMENT_TYPE.screenTitle,
+    lineHeight: 32,
+    fontWeight: '700',
+    letterSpacing: 0,
+  },
+  statementSubtitle: {
+    marginTop: 1,
+    fontSize: STATEMENT_TYPE.secondary,
+    lineHeight: 18,
+    fontWeight: '400',
+  },
+  monthSelector: {
+    height: 44,
+    minWidth: 150,
+    maxWidth: 178,
+    paddingHorizontal: 13,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7F3',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+  },
+  monthSelectorCompact: {
+    minWidth: 132,
+    maxWidth: 146,
+    paddingHorizontal: 10,
+    gap: 7,
+  },
+  monthSelectorText: {
+    flex: 1,
+    color: '#111733',
+    fontSize: STATEMENT_TYPE.body,
+    lineHeight: 18,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  statementContent: {
+    gap: 16,
+  },
+  typeFiltersRow: {
+    gap: 8,
+    paddingRight: 2,
+  },
+  typeFilterChip: {
+    height: 45,
+    minWidth: 88,
+    paddingHorizontal: 16,
+    borderRadius: 15,
+    backgroundColor: '#F4F5FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeFilterChipActive: {
+    backgroundColor: PRIMARY,
+    shadowColor: PRIMARY,
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+  typeFilterText: {
+    color: '#6F7894',
+    fontSize: STATEMENT_TYPE.secondary,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
+  typeFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statementSearchBar: {
+    flex: 1,
+    minWidth: 0,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#F4F5FB',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statementSearchInput: {
+    flex: 1,
+    minWidth: 0,
+    color: '#111733',
+    fontSize: STATEMENT_TYPE.body,
+    lineHeight: 18,
+    fontWeight: '400',
+    paddingVertical: 0,
+  },
+  advancedFilterButton: {
+    width: 96,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#F4F5FB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  advancedFilterText: {
+    color: '#596174',
+    fontSize: STATEMENT_TYPE.body,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  dayGroup: {
+    gap: 10,
+    marginTop: 4,
+  },
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  dayTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: STATEMENT_TYPE.medium,
+    lineHeight: 20,
+    fontWeight: '700',
+  },
+  dayTotal: {
+    maxWidth: 150,
+    textAlign: 'right',
+    fontSize: STATEMENT_TYPE.medium,
+    lineHeight: 20,
+    fontWeight: '700',
+  },
+  dayTransactionsList: {
+    gap: 9,
+  },
+  statementTxCard: {
+    minHeight: 86,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  statementTxLeft: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+  },
+  statementTxInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  statementTxTitle: {
+    fontSize: STATEMENT_TYPE.medium,
+    lineHeight: 19,
+    fontWeight: '700',
+  },
+  statementTxDescription: {
+    marginTop: 2,
+    fontSize: STATEMENT_TYPE.secondary,
+    lineHeight: 17,
+    fontWeight: '400',
+  },
+  statementTxTime: {
+    marginTop: 1,
+    fontSize: STATEMENT_TYPE.small,
+    lineHeight: 16,
+    fontWeight: '400',
+  },
+  statementTxRight: {
+    width: 138,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  statementTxRightContent: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-end',
+  },
+  statementTxAmount: {
+    maxWidth: '100%',
+    fontSize: STATEMENT_TYPE.medium,
+    lineHeight: 20,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  categoryBadge: {
+    marginTop: 7,
+    maxWidth: '100%',
+    minHeight: 28,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryBadgeText: {
+    fontSize: STATEMENT_TYPE.small,
+    lineHeight: 15,
+    fontWeight: '500',
+  },
+  statementEmptyContainer: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    gap: 6,
+  },
+  statementEmptySubtext: {
+    fontSize: STATEMENT_TYPE.secondary,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   tabContent: {
     gap: 12,
@@ -984,6 +1276,292 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#6C5CE7',
+  },
+  subscriptionsHeader: {
+    paddingBottom: 12,
+  },
+  subscriptionsHeaderRow: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  subscriptionsAddTopButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: '#F0EDFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionsTitleBlock: {
+    marginTop: 6,
+    paddingLeft: 74,
+    paddingRight: 58,
+  },
+  subscriptionsTitle: {
+    fontSize: 27,
+    lineHeight: 33,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  subscriptionsSubtitle: {
+    marginTop: 1,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '400',
+  },
+  subscriptionsContent: {
+    gap: 14,
+  },
+  subscriptionTabs: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 18,
+  },
+  subscriptionTabButton: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  subscriptionTabText: {
+    color: '#596174',
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  subscriptionTabTextActive: {
+    color: PRIMARY,
+    fontWeight: '800',
+  },
+  subscriptionTabLine: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#E5E8F2',
+  },
+  subscriptionTabLineActive: {
+    height: 2,
+    backgroundColor: PRIMARY,
+  },
+  subsSummaryCard: {
+    minHeight: 96,
+    borderRadius: 18,
+    backgroundColor: '#F4F6FC',
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  subsSummaryIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+    backgroundColor: '#E7E2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subsSummaryCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  subsSummaryLabel: {
+    color: '#6F7894',
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
+  subsSummaryTotal: {
+    marginTop: 3,
+    color: '#10152F',
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '800',
+  },
+  subsSummaryYearly: {
+    marginTop: 3,
+    color: '#6F7894',
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
+  subsSummaryYearlyStrong: {
+    color: '#10152F',
+    fontWeight: '800',
+  },
+  subsSummaryNeutralBadge: {
+    minWidth: 78,
+    maxWidth: 90,
+    minHeight: 50,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  subsSummaryNeutralText: {
+    color: '#6F7894',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  subsSummaryNeutralSubtext: {
+    color: '#8A93AC',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  addSubscriptionButton: {
+    height: 56,
+    borderRadius: 17,
+    backgroundColor: PRIMARY,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    shadowColor: PRIMARY,
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 6,
+  },
+  addSubscriptionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '800',
+  },
+  subscriptionListCard: {
+    minHeight: 88,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+  },
+  subscriptionLogoBox: {
+    width: 55,
+    height: 55,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  subscriptionCardCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  subscriptionCardName: {
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '800',
+  },
+  subscriptionAmountRow: {
+    marginTop: 3,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  subscriptionCardAmount: {
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '800',
+  },
+  subscriptionCardPeriod: {
+    flexShrink: 1,
+    color: '#6F7894',
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
+  subscriptionCardDate: {
+    marginTop: 4,
+    color: '#6F7894',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  subscriptionsEmptyCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E8EBF4',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    alignItems: 'center',
+    gap: 8,
+  },
+  subscriptionsEmptyTitle: {
+    color: '#10152F',
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  subscriptionsEmptySubtitle: {
+    color: '#6F7894',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  subscriptionsEmptyButton: {
+    marginTop: 5,
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionsEmptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '700',
+  },
+  subscriptionTipCard: {
+    minHeight: 78,
+    borderRadius: 18,
+    backgroundColor: '#F2EFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    marginTop: 10,
+  },
+  subscriptionTipIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: '#E7E2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subscriptionTipCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  subscriptionTipTitle: {
+    color: PRIMARY,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
+  },
+  subscriptionTipText: {
+    marginTop: 3,
+    color: '#6F7894',
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '500',
   },
   editSubscriptionContent: {
     gap: 16,

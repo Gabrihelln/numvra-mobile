@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { BudgetCategory } from '../types';
 import { budgetService } from '../services/budgetService';
 import { useAuth } from './AuthContext';
+import { mergeWithDefaultCategories } from '../constants/categories';
 
 interface CategoryContextValue {
   categories: BudgetCategory[];
@@ -32,18 +33,21 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLoading(true);
     setError(null);
     return budgetService.subscribeToBudgetCategories(
-      (nextCategories) => { setCategories(nextCategories); setLoading(false); },
+      (nextCategories) => { setCategories(mergeWithDefaultCategories(nextCategories)); setLoading(false); },
       (listenerError) => { setError(listenerError); setLoading(false); },
     );
   }, [user, reloadToken]);
 
-  const value = useMemo<CategoryContextValue>(() => ({
-    categories,
-    activeCategories: categories.filter(isActive),
-    loading,
-    error,
-    reload: () => setReloadToken((current) => current + 1),
-  }), [categories, error, loading]);
+  const value = useMemo<CategoryContextValue>(() => {
+    const mergedCategories = user ? mergeWithDefaultCategories(categories) : [];
+    return {
+      categories: mergedCategories,
+      activeCategories: mergedCategories.filter(isActive),
+      loading,
+      error,
+      reload: () => setReloadToken((current) => current + 1),
+    };
+  }, [categories, error, loading, user]);
 
   return <CategoryContext.Provider value={value}>{children}</CategoryContext.Provider>;
 };

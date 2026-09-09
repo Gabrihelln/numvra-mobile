@@ -260,7 +260,7 @@ export const pushNotificationService = {
 
           return {
             id: docSnap.id,
-            title: data.title || data.name || 'Notificacao',
+            title: data.title || data.name || 'Notificação',
             text: data.text || data.body || data.message || '',
             type: data.type || 'system',
             read: !!data.read,

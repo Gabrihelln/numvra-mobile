@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   Repeat,
   Target,
+  Tags,
   Settings,
   HelpCircle,
   LogOut,
@@ -125,7 +126,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setSelectedPhotoAsset(null);
       onClose();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'N?o foi poss?vel atualizar o perfil.';
+      const message = err instanceof Error ? err.message : 'Não foi possível atualizar o perfil.';
       const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
 
       console.error('Failed to update profile:', {
@@ -313,8 +314,22 @@ export const ProfileScreen: React.FC = () => {
       },
       {
         icon: Wallet,
+        label: 'Contas',
+        onPress: () => navigation.navigate('AddAccount'),
+        iconColor: '#6C5CE7',
+        iconBg: isDarkMode ? 'rgba(108, 92, 231, 0.15)' : '#EEF2FF',
+      },
+      {
+        icon: Wallet,
         label: 'Orçamento',
         onPress: () => navigation.navigate('Budget'),
+        iconColor: '#6C5CE7',
+        iconBg: isDarkMode ? 'rgba(108, 92, 231, 0.15)' : '#EEF2FF',
+      },
+      {
+        icon: Tags,
+        label: 'Categorias',
+        onPress: () => navigation.navigate('Categories'),
         iconColor: '#6C5CE7',
         iconBg: isDarkMode ? 'rgba(108, 92, 231, 0.15)' : '#EEF2FF',
       },
@@ -334,8 +349,8 @@ export const ProfileScreen: React.FC = () => {
       },
       {
         icon: Settings,
-        label: 'Limites por Categorias',
-        onPress: () => navigation.navigate('Budget'),
+        label: 'Limites por categoria',
+        onPress: () => navigation.navigate('CategoryLimits'),
         iconColor: '#6C5CE7',
         iconBg: isDarkMode ? 'rgba(108, 92, 231, 0.15)' : '#EEF2FF',
       },

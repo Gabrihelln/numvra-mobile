@@ -1,5 +1,5 @@
-﻿import React from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { BottomTabBarProps, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,7 +13,6 @@ import { CreditCard, Plus, Receipt, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Logo } from '../components/common/Logo';
 import { ThemeColors } from '../theme/colors';
-import { typography } from '../theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -25,43 +24,41 @@ type FloatingTabBarProps = BottomTabBarProps & {
   openAddTransaction: () => void;
 };
 
+const TAB_LABELS: Record<string, string> = {
+  Dashboard: 'Início',
+  Statement: 'Extrato',
+  AddAction: '',
+  Cards: 'Cartões',
+  Profile: 'Perfil',
+};
+
 const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
   state,
   navigation,
   colors,
   isDarkMode,
-  width,
   bottomInset,
   openAddTransaction,
 }) => {
-  const tabBarBottom = Math.max(bottomInset, 12);
-  const tabBarMargin = Math.max(18, Math.min(28, Math.round(width * 0.05)));
+  const tabBarBottom = Math.max(bottomInset, 0);
   const tabBarBackground = isDarkMode ? colors.card : '#FFFFFF';
 
   const renderIcon = (routeName: string, focused: boolean) => {
-    const color = focused ? colors.primary : colors.textMuted;
+    const color = focused ? colors.primary : '#8B92A6';
 
     if (routeName === 'Dashboard') {
-      return <Logo size={22} showText={false} tintColor={focused ? undefined : colors.textMuted} />;
+      return <Logo size={22} showText={false} tintColor={focused ? undefined : '#8B92A6'} />;
     }
 
     if (routeName === 'Statement') {
-      return <Receipt size={22} color={color} />;
-    }
-
-    if (routeName === 'AddAction') {
-      return (
-        <View style={[styles.addIconFrame, { borderColor: color }]}>
-          <Plus size={16} color={color} strokeWidth={2.6} />
-        </View>
-      );
+      return <Receipt size={22} color={color} strokeWidth={2.4} />;
     }
 
     if (routeName === 'Cards') {
-      return <CreditCard size={22} color={color} />;
+      return <CreditCard size={23} color={color} strokeWidth={2.3} />;
     }
 
-    return <User size={22} color={color} />;
+    return <User size={23} color={color} strokeWidth={2.3} />;
   };
 
   return (
@@ -69,19 +66,21 @@ const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
       style={[
         styles.floatingTabBar,
         {
-          left: tabBarMargin,
-          right: tabBarMargin,
+          left: 0,
+          right: 0,
           bottom: tabBarBottom,
           backgroundColor: tabBarBackground,
           borderColor: isDarkMode ? colors.border : '#EEF1F8',
+          height: 78,
         },
       ]}
     >
       {state.routes.map((route, index) => {
         const focused = state.index === index;
+        const isAdd = route.name === 'AddAction';
 
         const onPress = () => {
-          if (route.name === 'AddAction') {
+          if (isAdd) {
             openAddTransaction();
             return;
           }
@@ -97,6 +96,16 @@ const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
           }
         };
 
+        if (isAdd) {
+          return (
+            <Pressable key={route.key} accessibilityRole="button" onPress={onPress} style={styles.addButtonSlot}>
+              <View style={styles.addFloatingButton}>
+                <Plus size={38} color="#FFFFFF" strokeWidth={2.2} />
+              </View>
+            </Pressable>
+          );
+        }
+
         return (
           <Pressable
             key={route.key}
@@ -105,9 +114,10 @@ const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
             onPress={onPress}
             style={styles.tabButton}
           >
-            <View style={styles.iconSlot}>
-              {renderIcon(route.name, focused)}
-            </View>
+            <View style={styles.iconSlot}>{renderIcon(route.name, focused)}</View>
+            <Text style={[styles.tabLabel, { color: focused ? colors.primary : '#8B92A6' }]} numberOfLines={1}>
+              {TAB_LABELS[route.name]}
+            </Text>
           </Pressable>
         );
       })}
@@ -135,65 +145,14 @@ export const TabNavigator: React.FC = () => {
           />
         )}
         screenOptions={{
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: colors.card,
-            elevation: 0,
-            shadowOpacity: 0,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          },
-          headerTitleStyle: {
-            color: colors.text,
-            fontWeight: '700',
-            fontSize: 18,
-          },
+          headerShown: false,
         }}
       >
-        <Tab.Screen
-          name="Dashboard"
-          component={DashboardScreen}
-          options={{
-            title: 'Inicio',
-            headerShown: false,
-          }}
-        />
-
-        <Tab.Screen
-          name="Statement"
-          component={StatementScreen}
-          options={{
-            title: 'Extrato',
-            headerShown: false,
-          }}
-        />
-
-        <Tab.Screen
-          name="AddAction"
-          component={DashboardScreen}
-          options={{
-            title: 'Adicionar',
-            headerShown: false,
-          }}
-        />
-
-        <Tab.Screen
-          name="Cards"
-          component={CardsScreen}
-          options={{
-            title: 'Cartoes',
-            headerShown: false,
-          }}
-        />
-
-        <Tab.Screen
-          name="Profile"
-          component={ProfileScreen}
-          options={{
-            title: 'Perfil',
-            headerShown: false,
-          }}
-        />
+        <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Início' }} />
+        <Tab.Screen name="Statement" component={StatementScreen} options={{ title: 'Extrato' }} />
+        <Tab.Screen name="AddAction" component={DashboardScreen} options={{ title: 'Adicionar' }} />
+        <Tab.Screen name="Cards" component={CardsScreen} options={{ title: 'Cartões' }} />
+        <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil' }} />
       </Tab.Navigator>
     </View>
   );
@@ -205,40 +164,58 @@ const styles = StyleSheet.create({
   },
   floatingTabBar: {
     position: 'absolute',
-    height: 58,
-    borderRadius: 32,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderWidth: 1,
+    borderBottomWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 0,
-    elevation: 8,
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingBottom: 4,
+    elevation: 12,
     shadowColor: '#000000',
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -3 },
   },
   tabButton: {
     flex: 1,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
   },
   iconSlot: {
-    width: 48,
-    height: 42,
-    borderRadius: 24,
+    width: 34,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addIconFrame: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.8,
+  tabLabel: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: 'Inter-Regular',
+  },
+  addButtonSlot: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  addFloatingButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#5748FF',
+    marginTop: -14,
+    shadowColor: '#5748FF',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
   },
 });
-

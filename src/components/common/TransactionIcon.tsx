@@ -18,6 +18,7 @@ import {
   CreditCard,
 } from 'lucide-react-native';
 import { getCategoryVisual } from '../../constants/iconRegistry';
+import { getSharedCategoryByName } from '../../constants/categories';
 import { RemoteIcon } from './RemoteIcon';
 
 interface TransactionIconProps {
@@ -70,8 +71,12 @@ export const TransactionIcon: React.FC<TransactionIconProps> = ({
     );
   }
 
-  if (configuredIcon && configuredIcon !== 'tag') {
-    const visual = getCategoryVisual(configuredIcon, configuredColor, isDarkMode);
+  const sharedCategory = getSharedCategoryByName(txCategory);
+  const resolvedIcon = configuredIcon || sharedCategory?.icon;
+  const resolvedColor = configuredColor || sharedCategory?.color;
+
+  if (resolvedIcon && resolvedIcon !== 'tag') {
+    const visual = getCategoryVisual(resolvedIcon, resolvedColor, isDarkMode);
     const ConfiguredIcon = visual.Icon;
     return (
       <View style={[styles.iconCircle, { backgroundColor: visual.backgroundColor }]}>

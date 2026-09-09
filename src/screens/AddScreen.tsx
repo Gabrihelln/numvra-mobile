@@ -1,160 +1,184 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  Platform,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { format } from 'date-fns';
-import { X, Calendar as CalendarIcon, ChevronRight, Check, Banknote, CreditCard, Layers } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { ArrowDown, ArrowUp, Banknote, Calculator, Calendar as CalendarIcon, ChevronDown, ChevronRight, CreditCard, Info, Layers } from 'lucide-react-native';
+import { BackButton } from '../components/common/BackButton';
+import { CalendarPicker } from '../components/common/CalendarPicker';
+import { ModalBottomSheet } from '../components/common/ModalBottomSheet';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useBudgets } from '../hooks/useBudgets';
 import { transactionService } from '../services/transactionService';
 import { cardService } from '../services/cardService';
-import { CalendarPicker } from '../components/common/CalendarPicker';
-import { SwipeableBottomSheet } from '../components/common/SwipeableBottomSheet';
-import { spacing, borderRadius, typography } from '../theme';
-import { CreditCardType } from '../types';
-import { useBudgets } from '../hooks/useBudgets';
 import { getCategoryVisual } from '../constants/iconRegistry';
-import { formatBrazilianDate } from '../utils/dateFormat';
+import { CreditCardType, Transaction } from '../types';
+import { toApiDate } from '../utils/dateFormat';
 
-const LEGACY_INCOME_CATEGORIES = [
-  { id: 'legacy-salary', label: 'Salário', icon: 'banknote', color: '#10b981' },
-  { id: 'legacy-investments', label: 'Invest.', icon: 'trophy', color: '#14b8a6' },
-  { id: 'legacy-gift', label: 'Presente', icon: 'gift', color: '#ec4899' },
-  { id: 'legacy-other-income', label: 'Outros', icon: 'plus', color: '#6b7280' },
+const PRIMARY = '#5748FF';
+const TEXT = '#10152F';
+const MUTED = '#6F7894';
+const BORDER = '#E5E8F2';
+const SOFT = '#F5F6FC';
+const DESC_LIMIT = 60;
+const NOTES_LIMIT = 120;
+const MAX_INSTALLMENTS = 12;
+type PaymentMethod = 'cash' | 'credit_card' | 'pix' | 'debit' | 'transfer' | 'boleto' | 'other';
+
+const incomeFallback = [
+  { id: 'salary', label: 'Salário', icon: 'banknote', color: '#10B981' },
+  { id: 'gift', label: 'Presente', icon: 'gift', color: '#EC4899' },
+  { id: 'other-income', label: 'Outros', icon: 'plus', color: '#6B7280' },
 ];
+const expenseFallback = [
+  { id: 'home', label: 'Moradia', icon: 'home', color: PRIMARY },
+  { id: 'food', label: 'Alimentação', icon: 'utensils', color: '#EF5B3F' },
+  { id: 'transport', label: 'Transporte', icon: 'car', color: '#F59E0B' },
+  { id: 'health', label: 'Saúde', icon: 'heartpulse', color: '#10B981' },
+  { id: 'leisure', label: 'Lazer', icon: 'theater', color: '#2D9CDB' },
+  { id: 'education', label: 'Educação', icon: 'graduationcap', color: '#7C3AED' },
+  { id: 'other', label: 'Outros', icon: 'plus', color: '#6B7280' },
+];
+const paymentLabels: Record<PaymentMethod, string> = {
+  cash: 'Conta corrente', credit_card: 'Cartão de crédito', pix: 'PIX', debit: 'Débito', transfer: 'Transferência', boleto: 'Boleto', other: 'Outros',
+};
+const paymentMethods: PaymentMethod[] = ['cash', 'credit_card', 'pix', 'debit', 'transfer', 'boleto', 'other'];
+
+const normalize = (value?: string) => (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const formatMoney = (value: number) => `R$ ${Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatRawAmount = (raw: string) => ((Number(raw.replace(/\D/g, '') || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const amountFromRaw = (raw: string) => Number(raw.replace(/\D/g, '') || 0) / 100;
+const rawFromAmount = (value?: number) => String(Math.round(Math.abs(value || 0) * 100));
+const parseLocalDate = (value?: string) => {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const parsed = value ? new Date(value) : new Date();
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+const formatLongDate = (value: Date | string) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }).format(value instanceof Date ? value : parseLocalDate(value));
+const addMonths = (date: Date, months: number) => new Date(date.getFullYear(), date.getMonth() + months, date.getDate());
+const splitInstallments = (total: number, count: number) => {
+  const cents = Math.round(total * 100);
+  const base = Math.floor(cents / count);
+  const rest = cents % count;
+  return Array.from({ length: count }, (_, index) => (base + (index < rest ? 1 : 0)) / 100);
+};
+const groupId = () => `inst-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const AddScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const editTx = route.params?.transaction as Transaction | undefined;
+  const isEditing = !!editTx?.id;
+  const insets = useSafeAreaInsets();
   const { colors, isDarkMode } = useTheme();
   const { user, checkLimit, triggerUpgrade } = useAuth();
   const { activeBudgetCategories, loading: categoriesLoading } = useBudgets();
+  const { width } = useWindowDimensions();
+  const compact = width < 360;
 
-  const [type, setType] = useState<'expense' | 'income'>('expense');
-  const [description, setDescription] = useState('');
-  const [amountRaw, setAmountRaw] = useState('');
-  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit_card'>('cash');
+  const [type, setType] = useState<'expense' | 'income'>(editTx?.type || 'expense');
+  const [description, setDescription] = useState((editTx?.description || editTx?.title || '').slice(0, DESC_LIMIT));
+  const [amountRaw, setAmountRaw] = useState(rawFromAmount(editTx?.amount));
+  const [categoryIndex, setCategoryIndex] = useState(0);
+  const [date, setDate] = useState(parseLocalDate(editTx?.date));
+  const [firstDate, setFirstDate] = useState(parseLocalDate(editTx?.date));
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>((editTx?.paymentMethod as PaymentMethod) || (editTx?.isCardCharge ? 'credit_card' : 'cash'));
   const [cards, setCards] = useState<CreditCardType[]>([]);
-  const [selectedCardId, setSelectedCardId] = useState('');
-  const [installments, setInstallments] = useState(1);
+  const [selectedCardId, setSelectedCardId] = useState(editTx?.cardId || '');
+  const [installmentEnabled, setInstallmentEnabled] = useState((editTx?.installments || 1) > 1);
+  const [installments, setInstallments] = useState(Math.min(editTx?.installments || 3, MAX_INSTALLMENTS));
+  const [notes, setNotes] = useState((editTx?.notes || '').slice(0, NOTES_LIMIT));
+  const [openDate, setOpenDate] = useState(false);
+  const [openFirstDate, setOpenFirstDate] = useState(false);
+  const [openPayment, setOpenPayment] = useState(false);
+  const [openInstallments, setOpenInstallments] = useState(false);
+  const [openCards, setOpenCards] = useState(false);
+  const [loading, setLoading] = useState(false);
   const cardAccess = checkLimit('card');
 
-  React.useEffect(() => {
-    const unsubscribeCards = cardService.subscribeToCards((cardList) => {
-      setCards(cardList);
-      if (!selectedCardId && cardList.length > 0) setSelectedCardId(cardList[0].id);
-    });
-    return () => {
-      unsubscribeCards();
-    };
-  }, []);
+  useEffect(() => cardService.subscribeToCards((next) => {
+    setCards(next);
+    if (!selectedCardId && next[0]) setSelectedCardId(next[0].id);
+  }), [selectedCardId]);
 
-  const configuredCategories = activeBudgetCategories
-    .filter((category) => category.type === type || (type === 'expense' && !category.type))
-    .map((category) => ({
-      id: category.id,
-      label: category.name || 'Sem categoria',
-      icon: category.icon,
-      color: category.color,
-    }));
-  const categories = configuredCategories.length > 0
-    ? configuredCategories
-    : type === 'income'
-      ? LEGACY_INCOME_CATEGORIES
-      : [];
+  const categories = useMemo(() => {
+    const configured = activeBudgetCategories.filter((cat) => cat.type === type || (type === 'expense' && !cat.type)).map((cat) => ({ id: cat.id, label: cat.name || 'Sem categoria', icon: cat.icon, color: cat.color }));
+    return configured.length ? configured : type === 'income' ? incomeFallback : expenseFallback;
+  }, [activeBudgetCategories, type]);
 
-  const formatDate = (date: Date) => {
-    return formatBrazilianDate(date);
-  };
+  useEffect(() => {
+    if (!editTx) return;
+    const found = categories.findIndex((cat) => normalize(cat.label) === normalize(editTx.category));
+    if (found >= 0) setCategoryIndex(found);
+  }, [categories, editTx]);
 
-  // Format integer cents into BRL display e.g. "12,50"
-  const formatDisplayAmount = (raw: string) => {
-    if (!raw) return '0,00';
-    const cleanNumbers = raw.replace(/\D/g, '');
-    if (!cleanNumbers) return '0,00';
-    const num = parseFloat(cleanNumbers) / 100;
-    return num.toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
+  const selectedCategory = categories[categoryIndex] || categories[0];
+  const selectedCard = cards.find((card) => card.id === selectedCardId);
+  const amount = amountFromRaw(amountRaw);
+  const isCard = type === 'expense' && paymentMethod === 'credit_card';
+  const totalInstallments = isCard && installmentEnabled ? Math.max(2, installments) : 1;
+  const parts = splitInstallments(amount, totalInstallments);
 
-  const handleAmountChange = (text: string) => {
-    const cleanNumbers = text.replace(/\D/g, '');
-    setAmountRaw(cleanNumbers);
-  };
-
-  const getNumericValue = (): number => {
-    if (!amountRaw) return 0;
-    return parseFloat(amountRaw) / 100;
-  };
-
-  const installmentValue = installments > 0 ? getNumericValue() / installments : 0;
-
-  const handleSaveTransaction = async () => {
-    const numericAmount = getNumericValue();
-    if (numericAmount <= 0) {
-      Alert.alert('Valor inválido', 'Informe um valor maior que zero para a movimentação.');
-      return;
+  const selectType = (next: 'expense' | 'income') => {
+    setType(next);
+    setCategoryIndex(0);
+    if (next === 'income') {
+      setPaymentMethod('cash');
+      setInstallmentEnabled(false);
     }
+  };
 
-    const selectedCategoryData = categories[selectedCategoryIndex];
-    const selectedCategory = selectedCategoryData?.label || (type === 'expense' ? 'Outros' : 'Salário');
-    const desc = description.trim() || (type === 'expense' ? `Gasto com ${selectedCategory}` : `Receita de ${selectedCategory}`);
-    const isCard = type === 'expense' && paymentMethod === 'credit_card';
-    const selectedCard = cards.find((card) => card.id === selectedCardId);
-
-    if (isCard && !cardAccess.allowed) {
+  const selectPayment = (method: PaymentMethod) => {
+    if (method === 'credit_card' && !cardAccess.allowed) {
       triggerUpgrade?.('card', cardAccess.reason);
       return;
     }
+    setPaymentMethod(method);
+    if (method !== 'credit_card') setInstallmentEnabled(false);
+    setOpenPayment(false);
+  };
 
+  const save = async () => {
+    if (amount <= 0) {
+      Alert.alert('Valor inválido', 'Informe um valor maior que zero para a movimentação.');
+      return;
+    }
     if (isCard && !selectedCard) {
       Alert.alert('Cartão necessário', 'Selecione um cartão válido para registrar uma compra no cartão.');
       return;
     }
-
+    const visual = getCategoryVisual(selectedCategory?.icon, selectedCategory?.color, isDarkMode);
+    const category = selectedCategory?.label || (type === 'expense' ? 'Outros' : 'Salário');
+    const desc = description.trim() || (type === 'expense' ? `Gasto com ${category}` : `Receita de ${category}`);
     setLoading(true);
     try {
       if (user) {
-        const totalInstallments = isCard ? installments : 1;
-        const baseAmount = type === 'expense' ? -numericAmount : numericAmount;
-        const amountPerInstallment = isCard && totalInstallments > 1 ? -(numericAmount / totalInstallments) : baseAmount;
-
-        for (let index = 0; index < totalInstallments; index++) {
-          const installmentDate = new Date(selectedDate);
-          if (isCard && totalInstallments > 1) {
-            installmentDate.setMonth(selectedDate.getMonth() + index);
-          }
-
-          await transactionService.addTransaction({
-            title: isCard && totalInstallments > 1 ? `${desc} (${index + 1}/${totalInstallments})` : desc,
-            description: desc,
-            amount: amountPerInstallment,
-            date: format(installmentDate, 'yyyy-MM-dd'),
-            category: selectedCategory,
-            type: type,
-            isCardCharge: isCard,
-            ...(isCard && selectedCard ? {
-              cardId: selectedCard.id,
-              cardName: `${selectedCard.name} (???? ${selectedCard.finalDigits})`,
-              installments: totalInstallments,
-              currentInstallment: index + 1,
-            } : {}),
-            status: 'completed',
+        if (isEditing && editTx) {
+          await transactionService.updateTransaction(editTx.id, {
+            title: desc, description: desc, notes: notes.trim() || undefined, amount: type === 'expense' ? -amount : amount,
+            date: toApiDate(date), category, categoryColor: selectedCategory?.color || visual.color, icon: selectedCategory?.icon,
+            type, paymentMethod, sourceType: isCard ? 'card' : 'account', sourceName: isCard && selectedCard ? selectedCard.name : 'Conta principal',
+            isCardCharge: isCard, cardId: isCard ? selectedCard?.id : '',
+            cardName: isCard && selectedCard ? `${selectedCard.name} • Cartão final ${selectedCard.finalDigits || selectedCard.lastFourDigits || '----'}` : '',
+            status: editTx.status || 'completed',
+            transactionEvents: [...(editTx.transactionEvents || []), { id: `evt-${Date.now()}`, type: 'updated', title: 'Movimentação atualizada', description: 'Dados atualizados no Numvra.', createdMs: Date.now(), createdAt: new Date().toISOString() }],
           });
+          if (editTx.isCardCharge && editTx.cardId && editTx.type === 'expense') await cardService.adjustUsedLimit(editTx.cardId, -Math.abs(editTx.amount));
+          if (isCard && selectedCard) await cardService.adjustUsedLimit(selectedCard.id, amount);
+        } else {
+          const installmentGroupId = totalInstallments > 1 ? groupId() : undefined;
+          for (let index = 0; index < totalInstallments; index++) {
+            const part = parts[index] || amount;
+            await transactionService.addTransaction({
+              title: totalInstallments > 1 ? `${desc} (${index + 1}/${totalInstallments})` : desc,
+              description: desc, notes: notes.trim() || undefined, amount: type === 'expense' ? -part : part,
+              date: toApiDate(totalInstallments > 1 ? addMonths(firstDate, index) : date), category, categoryColor: selectedCategory?.color || visual.color, icon: selectedCategory?.icon,
+              type, paymentMethod, sourceType: isCard ? 'card' : 'account', sourceName: isCard && selectedCard ? selectedCard.name : 'Conta principal', isCardCharge: isCard,
+              ...(isCard && selectedCard ? { cardId: selectedCard.id, cardName: `${selectedCard.name} • Cartão final ${selectedCard.finalDigits || selectedCard.lastFourDigits || '----'}` } : {}),
+              installments: totalInstallments, currentInstallment: totalInstallments > 1 ? index + 1 : undefined, installmentGroupId, installmentNumber: totalInstallments > 1 ? index + 1 : undefined, installmentTotal: totalInstallments > 1 ? totalInstallments : undefined, status: 'completed',
+            });
+          }
         }
       }
       navigation.goBack();
@@ -165,650 +189,40 @@ export const AddScreen: React.FC = () => {
     }
   };
 
-  // Cores dinâmicas para Despesa e Receita
-  const isExpense = type === 'expense';
-  const accentColor = isExpense ? '#ef4444' : '#10b981';
-  const accentBgLight = isExpense
-    ? (isDarkMode ? '#450a0a' : '#fee2e2')
-    : (isDarkMode ? '#064e3b' : '#d1fae5');
-  const accentBorderColor = isExpense
-    ? (isDarkMode ? '#f87171' : '#fca5a5')
-    : (isDarkMode ? '#34d399' : '#86efac');
+  const TypeButton = ({ value, label }: { value: 'expense' | 'income'; label: string }) => {
+    const selected = type === value;
+    const Icon = value === 'expense' ? ArrowDown : ArrowUp;
+    return <TouchableOpacity onPress={() => selectType(value)} style={[styles.typeButton, selected && styles.typeActive]}><View style={styles.typeIcon}><Icon size={22} color={selected ? PRIMARY : TEXT} strokeWidth={3} /></View><Text style={[styles.typeText, selected && styles.typeTextActive]}>{label}</Text></TouchableOpacity>;
+  };
 
-  return (
-    <SwipeableBottomSheet
-      useModal={false}
-      onClose={() => navigation.goBack()}
-      backgroundColor={colors.background}
-      borderColor={colors.border}
-      handleColor={isDarkMode ? '#3f3f46' : '#d4d4d8'}
-      maxHeight="84%"
-      scrollContentStyle={styles.contentContainer}
-      keyboardBehavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-        {/* Header com X e Título */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.closeButton}
-            activeOpacity={0.7}
-          >
-            <X size={28} color={colors.textSecondary} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Nova movimentação
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        {/* Seletor Despesa / Receita */}
-        <View style={[styles.typeSelectorContainer, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity
-            onPress={() => {
-              setType('expense');
-              setSelectedCategoryIndex(0);
-            }}
-            style={[
-              styles.typeButton,
-              isExpense && { backgroundColor: accentBgLight },
-            ]}
-            activeOpacity={0.8}
-          >
-            <View
-              style={[
-                styles.typeIconBadge,
-                {
-                  borderColor: isExpense ? accentBorderColor : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.typeIconSign,
-                  { color: isExpense ? accentColor : colors.textMuted },
-                ]}
-              >
-                -
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.typeButtonText,
-                {
-                  color: isExpense ? accentColor : colors.textSecondary,
-                  fontWeight: isExpense ? '700' : '600',
-                },
-              ]}
-            >
-              Despesa
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => {
-              setType('income');
-              setSelectedCategoryIndex(0);
-              setPaymentMethod('cash');
-              setInstallments(1);
-            }}
-            style={[
-              styles.typeButton,
-              !isExpense && { backgroundColor: accentBgLight },
-            ]}
-            activeOpacity={0.8}
-          >
-            <View
-              style={[
-                styles.typeIconBadge,
-                {
-                  borderColor: !isExpense ? accentBorderColor : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.typeIconSign,
-                  { color: !isExpense ? accentColor : colors.textMuted },
-                ]}
-              >
-                +
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.typeButtonText,
-                {
-                  color: !isExpense ? accentColor : colors.textSecondary,
-                  fontWeight: !isExpense ? '700' : '600',
-                },
-              ]}
-            >
-              Receita
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {isExpense && (
-          <View style={[styles.paymentSection, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Forma de pagamento</Text>
-            <View style={styles.paymentOptions}>
-              {(['cash', 'credit_card'] as const).map((method) => (
-                <TouchableOpacity
-                  key={method}
-                  onPress={() => {
-                    if (method === 'credit_card' && !cardAccess.allowed) {
-                      triggerUpgrade?.('card', cardAccess.reason);
-                      setPaymentMethod('cash');
-                      setInstallments(1);
-                      return;
-                    }
-                    setPaymentMethod(method);
-                    if (method === 'cash') setInstallments(1);
-                  }}
-                  style={[styles.paymentButton, paymentMethod === method && { backgroundColor: colors.primary }]}
-                  activeOpacity={0.8}
-                >
-                  {method === 'cash' ? <Banknote size={18} color={paymentMethod === method ? '#ffffff' : colors.textMuted} /> : <CreditCard size={18} color={paymentMethod === method ? '#ffffff' : colors.textMuted} />}
-                  <Text style={[styles.paymentButtonText, { color: paymentMethod === method ? '#ffffff' : colors.textSecondary }]}>
-                    {method === 'cash' ? 'Conta' : 'Cartão'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {paymentMethod === 'credit_card' && (
-              <View style={styles.cardOptions}>
-                {cards.length === 0 ? (
-                  <Text style={[styles.cardHint, { color: colors.textMuted }]}>Cadastre um cartão para lançar esta compra.</Text>
-                ) : (
-                  <>
-                    <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Cartão</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardList}>
-                      {cards.map((card) => (
-                        <TouchableOpacity
-                          key={card.id}
-                          onPress={() => setSelectedCardId(card.id)}
-                          style={[styles.cardChoice, { borderColor: selectedCardId === card.id ? colors.primary : colors.border }]}
-                        >
-                          <CreditCard size={16} color={colors.primary} />
-                          <Text style={[styles.cardChoiceText, { color: colors.text }]} numberOfLines={1}>{card.name}</Text>
-                          <Text style={[styles.cardDigits, { color: colors.textMuted }]}>•••• {card.finalDigits}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                    <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Parcelamento</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.installmentList}>
-                      {[1, 2, 3, 4, 5, 6, 10, 12].map((count) => (
-                        <TouchableOpacity
-                          key={count}
-                          onPress={() => setInstallments(count)}
-                          style={[styles.installmentChoice, { backgroundColor: installments === count ? colors.primary : colors.card }]}
-                        >
-                          <Layers size={14} color={installments === count ? '#ffffff' : colors.textMuted} />
-                          <Text style={{ color: installments === count ? '#ffffff' : colors.text, fontWeight: '700' }}>{count}x</Text>
-                          <Text style={{ color: installments === count ? '#ffffff' : colors.textMuted, fontSize: 11, fontWeight: '700' }}>
-                            de R$ {installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                    {installments > 1 && getNumericValue() > 0 && (
-                      <Text style={[styles.cardHint, { color: colors.primary }]}>Serão lançadas {installments} parcelas de R$ {installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.</Text>
-                    )}
-                  </>
-                )}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Campos Descrição e Valor */}
-        <View style={styles.inputsSection}>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Descrição</Text>
-            <TextInput
-              placeholder="Ex: Compras no mercado"
-              placeholderTextColor={colors.textMuted}
-              value={description}
-              onChangeText={setDescription}
-              style={[
-                styles.descriptionInput,
-                {
-                  backgroundColor: colors.surface,
-                  color: colors.text,
-                },
-              ]}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Valor</Text>
-            <View style={styles.amountDisplayRow}>
-              <Text
-                style={[
-                  styles.amountCurrency,
-                  { color: isExpense ? (isDarkMode ? '#f87171' : '#7f1d1d') : (isDarkMode ? '#34d399' : '#14532d') },
-                ]}
-              >
-                R$
-              </Text>
-              <TextInput
-                placeholder="0,00"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="numeric"
-                value={formatDisplayAmount(amountRaw)}
-                onChangeText={handleAmountChange}
-                style={[
-                  styles.amountInput,
-                  {
-                    color: isExpense
-                      ? (isDarkMode ? '#f87171' : '#7f1d1d')
-                      : (isDarkMode ? '#34d399' : '#14532d'),
-                  },
-                ]}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Seção Categorias */}
-        <View style={styles.categorySection}>
-          <View style={styles.categoryHeader}>
-            <Text style={[styles.categorySectionTitle, { color: colors.text }]}>
-              Categoria
-            </Text>
-            <TouchableOpacity activeOpacity={0.7}>
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>
-                Ver todas
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.categoriesGrid}>
-            {categories.map((cat, i) => {
-              const isSelected = selectedCategoryIndex === i;
-              const categoryVisual = getCategoryVisual(cat.icon, cat.color, isDarkMode);
-              const CategoryIcon = categoryVisual.Icon;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setSelectedCategoryIndex(i)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.categoryCard,
-                    {
-                      backgroundColor: isSelected ? colors.primary : colors.surface,
-                      borderColor: isSelected ? colors.primary : 'transparent',
-                    },
-                  ]}
-                >
-                  {categoriesLoading && type === 'expense' ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <CategoryIcon size={26} color={isSelected ? '#ffffff' : categoryVisual.color} />
-                  )}
-                  <Text
-                    style={[
-                      styles.categoryLabel,
-                      {
-                        color: isSelected ? '#ffffff' : colors.text,
-                        fontWeight: '700',
-                      },
-                    ]}
-                  >
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-            {!categoriesLoading && categories.length === 0 && (
-              <Text style={[styles.emptyCategoriesText, { color: colors.textMuted }]}>Nenhuma categoria ativa disponível.</Text>
-            )}
-          </View>
-        </View>
-
-        {/* Botão Seletor de Data */}
-        <TouchableOpacity
-          onPress={() => setIsCalendarOpen(true)}
-          style={[styles.dateSelectorButton, { backgroundColor: colors.surface }]}
-          activeOpacity={0.7}
-        >
-          <View style={styles.dateSelectorLeft}>
-            <View
-              style={[
-                styles.calendarIconContainer,
-                { backgroundColor: colors.card },
-              ]}
-            >
-              <CalendarIcon size={24} color={colors.primary} />
-            </View>
-            <View>
-              <Text style={[styles.dateSubLabel, { color: colors.textMuted }]}>
-                DATA DA MOVIMENTAÇÃO
-              </Text>
-              <Text style={[styles.dateMainText, { color: colors.text }]}>
-                {formatDate(selectedDate)}
-              </Text>
-            </View>
-          </View>
-          <ChevronRight size={24} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        {/* Botão Confirmar / Adicionar Movimentação */}
-        <TouchableOpacity
-          id="btn-confirm-add-movement"
-          onPress={handleSaveTransaction}
-          disabled={loading}
-          style={[
-            styles.submitButton,
-            { backgroundColor: colors.primary },
-          ]}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <>
-              <View style={styles.submitCheckCircle}>
-                <Check size={20} color="#ffffff" strokeWidth={3} />
-              </View>
-              <Text style={styles.submitButtonText}>
-                Adicionar Movimentação
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Modal de Calendário */}
-        <CalendarPicker
-          isOpen={isCalendarOpen}
-          onClose={() => setIsCalendarOpen(false)}
-          selectedDate={selectedDate}
-          onSelect={setSelectedDate}
-        />
-    </SwipeableBottomSheet>
-  );
+  return <SafeAreaView style={[styles.safe, { backgroundColor: isDarkMode ? '#121214' : '#FAF9FF' }]}><ScrollView contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 8) + 10, paddingBottom: Math.max(insets.bottom, 16) + 26 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <View style={styles.header}><BackButton onPress={() => navigation.goBack()} /><View style={styles.headerText}><Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{isEditing ? 'Editar movimentação' : 'Nova movimentação'}</Text><Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>Registre uma receita ou despesa no seu controle.</Text></View></View>
+    <View style={styles.typeRow}><TypeButton value="expense" label="Despesa" /><TypeButton value="income" label="Receita" /></View>
+    <View style={styles.card}><Text style={styles.cardTitle}>Valor</Text><View style={styles.amountBox}><Text style={styles.currency}>R$</Text><TextInput value={formatRawAmount(amountRaw)} onChangeText={(v) => setAmountRaw(v.replace(/\D/g, ''))} keyboardType="numeric" style={styles.amountInput} placeholder="0,00" placeholderTextColor="#A5ABBE" /><View style={styles.calc}><Calculator size={22} color={TEXT} /></View></View></View>
+    <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>Categoria</Text><Text style={styles.link}>Ver todas</Text></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catList}>{categories.map((cat, index) => { const selected = index === categoryIndex; const visual = getCategoryVisual(cat.icon, cat.color, isDarkMode); const Icon = visual.Icon; return <TouchableOpacity key={cat.id} onPress={() => setCategoryIndex(index)} style={[styles.cat, selected && styles.catSelected]}><View style={[styles.catIcon, { backgroundColor: selected ? '#EEE9FF' : visual.backgroundColor }]}>{categoriesLoading ? <ActivityIndicator size="small" color={PRIMARY} /> : <Icon size={compact ? 22 : 24} color={selected ? PRIMARY : visual.color} />}</View><Text style={[styles.catText, selected && styles.catTextSelected]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{cat.label}</Text></TouchableOpacity>; })}</ScrollView></View>
+    <View style={styles.card}><Text style={styles.cardTitle}>Descrição</Text><View style={styles.inputBox}><TextInput value={description} onChangeText={(v) => v.length <= DESC_LIMIT && setDescription(v)} placeholder="Ex.: Almoço no restaurante, mensalidade..." placeholderTextColor="#9AA2B6" style={styles.input} /><Text style={styles.counter}>{description.length}/{DESC_LIMIT}</Text></View></View>
+    <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>Conta / Cartão</Text><TouchableOpacity onPress={() => Alert.alert('Gerenciar contas', 'O app ainda não possui uma tela dedicada de contas. Cartões podem ser gerenciados na aba Cartões.')}><Text style={styles.link}>Gerenciar contas</Text></TouchableOpacity></View><TouchableOpacity style={styles.source} onPress={() => isCard ? setOpenCards(true) : setOpenPayment(true)}><View style={styles.sourceIcon}>{isCard ? <CreditCard size={25} color="#FFF" /> : <Banknote size={25} color="#FFF" />}</View><View style={{ flex: 1 }}><Text style={styles.sourceTitle}>{isCard && selectedCard ? selectedCard.name : 'Conta principal'}</Text><Text style={styles.sourceSub}>{isCard && selectedCard ? `Cartão final ${selectedCard.finalDigits || selectedCard.lastFourDigits || '----'}` : 'Conta corrente'}</Text></View><ChevronRight size={22} color={TEXT} /></TouchableOpacity></View>
+    <View style={styles.two}><TouchableOpacity style={styles.selectCard} onPress={() => setOpenDate(true)}><View style={styles.smallIcon}><CalendarIcon size={22} color={PRIMARY} /></View><View style={{ flex: 1 }}><Text style={styles.selectLabel}>Data da movimentação</Text><Text style={styles.selectValue}>{formatLongDate(date)}</Text></View><ChevronDown size={18} color={TEXT} /></TouchableOpacity><TouchableOpacity style={styles.selectCard} onPress={() => setOpenPayment(true)}><View style={styles.smallIcon}><CreditCard size={22} color={PRIMARY} /></View><View style={{ flex: 1 }}><Text style={styles.selectLabel}>Tipo de pagamento</Text><Text style={styles.selectValue}>{paymentLabels[paymentMethod]}</Text></View><ChevronRight size={18} color={TEXT} /></TouchableOpacity></View>
+    {isCard && <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>Parcelamento <Text style={styles.optional}>(opcional)</Text></Text><Switch value={installmentEnabled} onValueChange={setInstallmentEnabled} trackColor={{ false: '#DDE1EE', true: PRIMARY }} thumbColor="#FFF" /></View>{installmentEnabled && <><View style={styles.two}><TouchableOpacity style={styles.installSelect} onPress={() => setOpenInstallments(true)}><Text style={styles.selectLabel}>Número de parcelas</Text><Text style={styles.selectValue}>{installments} parcelas</Text></TouchableOpacity><TouchableOpacity style={styles.installSelect} onPress={() => setOpenFirstDate(true)}><Text style={styles.selectLabel}>Primeira parcela</Text><Text style={styles.selectValue} numberOfLines={1}>{formatLongDate(firstDate)}</Text></TouchableOpacity></View>{amount > 0 && <View style={styles.info}><Info size={17} color={PRIMARY} /><Text style={styles.infoText}>Serão criadas {totalInstallments} movimentações de {formatMoney(parts[0] || 0)}</Text></View>}</>}</View>}
+    <View style={styles.card}><Text style={styles.cardTitle}>Observações <Text style={styles.optional}>(opcional)</Text></Text><View style={styles.notesBox}><TextInput value={notes} onChangeText={(v) => v.length <= NOTES_LIMIT && setNotes(v)} placeholder="Adicione alguma observação..." placeholderTextColor="#9AA2B6" multiline textAlignVertical="top" style={styles.notesInput} /><Text style={styles.notesCounter}>{notes.length}/{NOTES_LIMIT}</Text></View></View>
+    <TouchableOpacity id="btn-confirm-add-movement" disabled={loading} onPress={save} style={[styles.submit, loading && { opacity: 0.7 }]}>{loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitText}>{isEditing ? 'Salvar alterações' : 'Salvar movimentação'}</Text>}</TouchableOpacity>
+  </ScrollView><CalendarPicker isOpen={openDate} onClose={() => setOpenDate(false)} selectedDate={date} onSelect={setDate} /><CalendarPicker isOpen={openFirstDate} onClose={() => setOpenFirstDate(false)} selectedDate={firstDate} onSelect={setFirstDate} />
+  <ModalBottomSheet isOpen={openPayment} onClose={() => setOpenPayment(false)} title="Tipo de pagamento"><View style={styles.sheet}>{paymentMethods.map((method) => type === 'income' && method === 'credit_card' ? null : <TouchableOpacity key={method} onPress={() => selectPayment(method)} style={[styles.sheetOption, paymentMethod === method && styles.sheetSelected]}><Text style={[styles.sheetText, paymentMethod === method && styles.sheetTextSelected]}>{paymentLabels[method]}</Text></TouchableOpacity>)}</View></ModalBottomSheet>
+  <ModalBottomSheet isOpen={openInstallments} onClose={() => setOpenInstallments(false)} title="Número de parcelas"><View style={styles.sheetGrid}>{Array.from({ length: MAX_INSTALLMENTS - 1 }, (_, i) => i + 2).map((count) => <TouchableOpacity key={count} onPress={() => { setInstallments(count); setOpenInstallments(false); }} style={[styles.pill, installments === count && styles.pillSelected]}><Text style={[styles.pillText, installments === count && styles.pillTextSelected]}>{count}x</Text></TouchableOpacity>)}</View></ModalBottomSheet>
+  <ModalBottomSheet isOpen={openCards} onClose={() => setOpenCards(false)} title="Escolher cartão"><View style={styles.sheet}>{cards.map((card) => <TouchableOpacity key={card.id} onPress={() => { setSelectedCardId(card.id); setOpenCards(false); }} style={[styles.sheetOption, selectedCardId === card.id && styles.sheetSelected]}><Text style={[styles.sheetText, selectedCardId === card.id && styles.sheetTextSelected]}>{card.name} • final {card.finalDigits || card.lastFourDigits || '----'}</Text></TouchableOpacity>)}</View></ModalBottomSheet>
+  </SafeAreaView>;
 };
 
 const styles = StyleSheet.create({
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-  },
-  bottomSheet: {
-    marginTop: 'auto',
-    width: '100%',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    paddingTop: spacing.sm,
-    overflow: 'hidden',
-  },
-  handle: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: spacing.sm,
-  },
-  container: {
-    flexGrow: 0,
-    flexShrink: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  closeButton: {
-    padding: spacing.xs,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  headerSpacer: {
-    width: 32,
-  },
-  typeSelectorContainer: {
-    flexDirection: 'row',
-    padding: spacing.xs,
-    borderRadius: borderRadius.lg,
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  typeButton: {
-    flex: 1,
-    height: 48,
-    borderRadius: borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  typeIconBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeIconSign: {
-    fontSize: 18,
-    fontWeight: '900',
-    lineHeight: 20,
-  },
-  typeButtonText: {
-    fontSize: 14,
-  },
-  paymentSection: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  paymentOptions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  paymentButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  paymentButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  cardOptions: {
-    gap: spacing.sm,
-  },
-  cardHint: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardList: {
-    gap: spacing.sm,
-  },
-  cardChoice: {
-    width: 150,
-    minHeight: 58,
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    gap: 2,
-  },
-  cardChoiceText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  cardDigits: {
-    fontSize: 10,
-  },
-  installmentList: {
-    gap: spacing.xs,
-  },
-  installmentChoice: {
-    minWidth: 52,
-    height: 36,
-    borderRadius: borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    paddingHorizontal: spacing.xs,
-  },
-  inputsSection: {
-    gap: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  inputGroup: {
-    gap: spacing.sm,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  descriptionInput: {
-    height: 52,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    fontSize: 16,
-  },
-  amountDisplayRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-  },
-  amountCurrency: {
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 38,
-    fontWeight: '700',
-    padding: 0,
-    margin: 0,
-  },
-  categorySection: {
-    marginBottom: spacing.lg,
-  },
-  categoryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  categorySectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  viewAllText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  categoryCard: {
-    width: '30.5%',
-    height: 78,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-  },
-  emptyCategoriesText: {
-    width: '100%',
-    textAlign: 'center',
-    fontSize: 13,
-    paddingVertical: spacing.md,
-  },
-  categoryLabel: {
-    fontSize: 10,
-    textAlign: 'center',
-  },
-  dateSelectorButton: {
-    width: '100%',
-    height: 64,
-    borderRadius: 20,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  dateSelectorLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  calendarIconContainer: {
-    padding: spacing.sm,
-    borderRadius: borderRadius.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  dateSubLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  dateMainText: {
-    fontSize: 15,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-    marginTop: 2,
-  },
-  submitButton: {
-    width: '100%',
-    height: 58,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    shadowColor: '#0ea5e9',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-    marginTop: 'auto',
-  },
-  submitCheckCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  safe: { flex: 1 }, content: { paddingHorizontal: 18, gap: 16 }, header: { flexDirection: 'row', alignItems: 'center', gap: 16 }, headerText: { flex: 1, minWidth: 0 }, title: { fontSize: 25, lineHeight: 31, fontWeight: '800' }, subtitle: { fontSize: 13, lineHeight: 17 },
+  typeRow: { flexDirection: 'row', gap: 12 }, typeButton: { flex: 1, height: 54, borderRadius: 16, backgroundColor: SOFT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }, typeActive: { backgroundColor: PRIMARY }, typeIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' }, typeText: { color: '#596174', fontSize: 15, fontWeight: '700' }, typeTextActive: { color: '#FFF' },
+  card: { borderRadius: 18, borderWidth: 1, borderColor: '#E8EBF4', backgroundColor: '#FFF', padding: 14, gap: 12 }, cardTitle: { color: TEXT, fontSize: 15, fontWeight: '800' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, link: { color: PRIMARY, fontSize: 13, fontWeight: '700' }, optional: { color: MUTED, fontWeight: '600' },
+  amountBox: { height: 58, borderRadius: 14, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, currency: { color: TEXT, fontSize: 20, fontWeight: '800' }, amountInput: { flex: 1, color: '#A5ABBE', fontSize: 28, fontWeight: '800', padding: 0 }, calc: { width: 40, height: 40, borderRadius: 12, backgroundColor: SOFT, alignItems: 'center', justifyContent: 'center' },
+  catList: { gap: 12, paddingRight: 4 }, cat: { width: 66, alignItems: 'center', gap: 6, borderRadius: 13, borderWidth: 1, borderColor: 'transparent', paddingVertical: 7 }, catSelected: { borderColor: PRIMARY, backgroundColor: '#F4F0FF' }, catIcon: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, catText: { width: '100%', color: '#596174', fontSize: 11, fontWeight: '600', textAlign: 'center' }, catTextSelected: { color: PRIMARY, fontWeight: '800' },
+  inputBox: { height: 46, borderRadius: 13, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }, input: { flex: 1, color: TEXT, fontSize: 13, padding: 0 }, counter: { color: '#929AB1', fontSize: 12, fontWeight: '700' },
+  source: { minHeight: 58, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }, sourceIcon: { width: 46, height: 46, borderRadius: 12, backgroundColor: '#6D28D9', alignItems: 'center', justifyContent: 'center' }, sourceTitle: { color: TEXT, fontSize: 15, fontWeight: '800' }, sourceSub: { color: MUTED, fontSize: 12, marginTop: 2 },
+  two: { flexDirection: 'row', gap: 12 }, selectCard: { flex: 1, minHeight: 66, borderRadius: 16, borderWidth: 1, borderColor: '#E8EBF4', backgroundColor: '#FFF', padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, smallIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#F0EDFF', alignItems: 'center', justifyContent: 'center' }, selectLabel: { color: MUTED, fontSize: 11, fontWeight: '600' }, selectValue: { color: TEXT, fontSize: 13, fontWeight: '800', marginTop: 3 },
+  installSelect: { flex: 1, minHeight: 58, borderRadius: 13, borderWidth: 1, borderColor: BORDER, padding: 12, justifyContent: 'center' }, info: { minHeight: 40, borderRadius: 12, backgroundColor: '#F0EDFF', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 9 }, infoText: { flex: 1, color: PRIMARY, fontSize: 12, fontWeight: '600' },
+  notesBox: { minHeight: 86, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 12, paddingBottom: 22 }, notesInput: { minHeight: 48, color: TEXT, fontSize: 13, padding: 0 }, notesCounter: { position: 'absolute', right: 12, bottom: 8, color: '#929AB1', fontSize: 12, fontWeight: '700' }, submit: { height: 56, borderRadius: 16, backgroundColor: PRIMARY, alignItems: 'center', justifyContent: 'center', marginTop: 8 }, submitText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  sheet: { gap: 10 }, sheetOption: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: BORDER, backgroundColor: '#FFF', paddingHorizontal: 14, justifyContent: 'center' }, sheetSelected: { borderColor: PRIMARY, backgroundColor: '#F0EDFF' }, sheetText: { color: TEXT, fontSize: 14, fontWeight: '700' }, sheetTextSelected: { color: PRIMARY }, sheetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, pill: { width: '22.6%', height: 44, borderRadius: 13, backgroundColor: SOFT, alignItems: 'center', justifyContent: 'center' }, pillSelected: { backgroundColor: PRIMARY }, pillText: { color: TEXT, fontSize: 14, fontWeight: '800' }, pillTextSelected: { color: '#FFF' },
 });

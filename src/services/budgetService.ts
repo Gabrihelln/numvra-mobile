@@ -13,6 +13,7 @@ import {
 import { db, auth } from '../config/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { BudgetCategory } from '../types';
+import { DEFAULT_BUDGET_CATEGORIES } from '../constants/categories';
 
 const COLLECTION_NAME = 'budgets';
 
@@ -101,12 +102,8 @@ export const budgetService = {
     if (!auth.currentUser) return;
     const uid = auth.currentUser.uid;
 
-    const defaults = [
-      { name: "Moradia", percentage: 40, icon: "home" },
-      { name: "Alimentação", percentage: 30, icon: "utensils" },
-      { name: "Saúde", percentage: 15, icon: "heart-pulse" },
-      { name: "Transporte", percentage: 15, icon: "bus" }
-    ];
+    const defaults = DEFAULT_BUDGET_CATEGORIES;
+
 
     try {
       const q = query(collection(db, COLLECTION_NAME), where('userId', '==', uid));

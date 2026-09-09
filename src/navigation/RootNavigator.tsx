@@ -5,6 +5,7 @@ import { RootStackParamList } from './types';
 import { TabNavigator } from './TabNavigator';
 import { AuthNavigator } from './AuthNavigator';
 import { AddScreen } from '../screens/AddScreen';
+import { TransactionDetailScreen } from '../screens/TransactionDetailScreen';
 import { AddSubscriptionScreen } from '../screens/AddSubscriptionScreen';
 import { SubscriptionsScreen, GoalsScreen } from '../screens/StatementScreen';
 import { BudgetScreen } from '../screens/BudgetScreen';
@@ -14,6 +15,8 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { HelpScreen } from '../screens/HelpScreen';
 import { PlaceholderScreen } from '../screens/PlaceholderScreen';
 import { AddGoalScreen } from '../screens/AddGoalScreen';
+import { AddAccountScreen } from '../screens/AddAccountScreen';
+import { CategoriesScreen, CategoryLimitsScreen } from '../screens/CategoriesScreen';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { SplashVisual } from '../screens/SplashScreen';
@@ -69,9 +72,13 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen name="Plan" component={PlanScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="AddAccount" component={AddAccountScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Categories" component={CategoriesScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="CategoryLimits" component={CategoryLimitsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Subscriptions" component={SubscriptionsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Goals" component={GoalsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="GoalDetail" component={GoalDetailScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} options={{ headerShown: false }} />
             <Stack.Group screenOptions={{ presentation: 'modal', animation: 'slide_from_bottom' }}>
             <Stack.Screen
               name="AddTransactionModal"

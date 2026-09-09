@@ -1,20 +1,36 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
-  where, 
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { handleFirestoreError, OperationType, removeUndefinedFields } from '../lib/firestoreUtils';
-import { Transaction } from '../types';
+import { Transaction, TransactionEvent } from '../types';
 import { cardService } from './cardService';
 
 const COLLECTION_NAME = 'transactions';
+
+const createPublicId = () => String(Math.floor(100000000 + Math.random() * 900000000));
+const createEventId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const createTransactionEvent = (
+  type: TransactionEvent['type'],
+  title: string,
+  description?: string,
+): TransactionEvent => ({
+  id: createEventId(),
+  type,
+  title,
+  description,
+  createdMs: Date.now(),
+  createdAt: new Date().toISOString(),
+});
 
 export const getTransactionTimestamp = (t: Transaction): number => {
   if (t.createdAt) {
@@ -79,18 +95,25 @@ export const transactionService = {
     if (!auth.currentUser) throw new Error('Usuário não autenticado');
 
     try {
+      const events = transaction.transactionEvents?.length
+        ? transaction.transactionEvents
+        : [createTransactionEvent('created', 'Movimentação criada', 'Transação registrada no Numvra.')];
       const payload = removeUndefinedFields({
         ...transaction,
+        publicId: transaction.publicId || createPublicId(),
+        status: transaction.status || 'completed',
         userId: auth.currentUser.uid,
-        createdMs: Date.now(),
+        createdMs: transaction.createdMs || Date.now(),
+        transactionEvents: events,
         createdAt: serverTimestamp(),
       });
-      await addDoc(collection(db, COLLECTION_NAME), payload);
+      const docRef = await addDoc(collection(db, COLLECTION_NAME), payload);
 
-      // If tied to a credit card, automatically update used limit
       if (transaction.isCardCharge && transaction.cardId && transaction.type === 'expense') {
         await cardService.adjustUsedLimit(transaction.cardId, Math.abs(transaction.amount));
       }
+
+      return docRef.id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, COLLECTION_NAME);
     }
@@ -98,21 +121,30 @@ export const transactionService = {
 
   updateTransaction: async (id: string, transaction: Partial<Transaction>) => {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id);
+      const nextEvents = transaction.transactionEvents;
       const payload = removeUndefinedFields({
         ...transaction,
+        ...(nextEvents ? { transactionEvents: nextEvents } : {}),
         updatedAt: serverTimestamp(),
       });
-      await updateDoc(docRef, payload);
+      await updateDoc(doc(db, COLLECTION_NAME, id), payload);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `${COLLECTION_NAME}/${id}`);
     }
   },
 
+  duplicateTransaction: async (transaction: Transaction) => {
+    const { id, createdAt, updatedAt, publicId, transactionEvents, ...copy } = transaction;
+    return transactionService.addTransaction({
+      ...copy,
+      publicId: createPublicId(),
+      transactionEvents: [createTransactionEvent('duplicated', 'Movimentação duplicada', 'Nova movimentação criada a partir de outra existente.')],
+    });
+  },
+
   deleteTransaction: async (id: string, cardInfo?: { cardId?: string; amount?: number; isCardCharge?: boolean }) => {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      await deleteDoc(docRef);
+      await deleteDoc(doc(db, COLLECTION_NAME, id));
       if (cardInfo?.isCardCharge && cardInfo.cardId && cardInfo.amount) {
         await cardService.adjustUsedLimit(cardInfo.cardId, -Math.abs(cardInfo.amount));
       }

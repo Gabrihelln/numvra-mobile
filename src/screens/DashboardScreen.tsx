@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
@@ -9,11 +9,9 @@ import {
   StatusBar,
   Image,
   useWindowDimensions,
-  AppState,
-  AppStateStatus,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -29,17 +27,17 @@ import { NotificationsModal } from '../components/modals/NotificationsModal';
 import { pushNotificationService, type SystemNotification } from '../services/pushNotificationService';
 import { TransactionIcon } from '../components/common/TransactionIcon';
 import { BalanceSummaryCard } from '../components/common/BalanceSummaryCard';
-import { getGreetingForDate } from '../utils/greeting';
 import { formatBrazilianDate, toApiDate } from '../utils/dateFormat';
-import { RemoteIcon } from '../components/common/RemoteIcon';
 import {
+  AlertCircle,
   Bell,
   ChevronRight,
-  Eye,
-  EyeOff,
-  TrendingUp,
-  AlertCircle,
   CreditCard,
+  Home,
+  MoreHorizontal,
+  Plane,
+  Plus,
+  Repeat2,
 } from 'lucide-react-native';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -139,8 +137,10 @@ const formatTransactionDateTime = (item: Transaction): string => {
 
   return formatBrazilianDate(item.date, 'Hoje');
 };
+const MASKED_AMOUNT = '\u2022\u2022\u2022\u2022\u2022\u2022';
+const MASKED_CARD_DIGITS = '\u2022\u2022\u2022\u2022';
 const formatDashboardAmount = (value: number, isVisible: boolean, options?: Intl.NumberFormatOptions) =>
-  isVisible ? value.toLocaleString('pt-BR', options) : '••••••';
+  isVisible ? value.toLocaleString('pt-BR', options) : MASKED_AMOUNT;
 const DASHBOARD_NOTIFICATIONS_LAST_SEEN_PREFIX = '@numvra:notifications:lastSeen:';
 
 const getNotificationCreatedAtMs = (notification: SystemNotification) => {
@@ -171,24 +171,6 @@ export const DashboardScreen: React.FC = () => {
   const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
   const [selectedCardForPayment, setSelectedCardForPayment] = useState<CreditCardType | null>(null);
   const [isPayCardModalOpen, setIsPayCardModalOpen] = useState(false);
-  const [greeting, setGreeting] = useState(() => getGreetingForDate(new Date()));
-
-  const refreshGreeting = useCallback(() => {
-    setGreeting(getGreetingForDate(new Date()));
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshGreeting();
-    }, [refreshGreeting])
-  );
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
-      if (state === 'active') refreshGreeting();
-    });
-    return () => subscription.remove();
-  }, [refreshGreeting]);
 
   useEffect(() => {
     if (!user) {
@@ -264,12 +246,12 @@ export const DashboardScreen: React.FC = () => {
     .filter((t) => t.type === 'income' && t.status !== 'pending')
     .reduce((acc, t) => acc + t.amount, 0);
 
-  // Despesas da conta corrente (débito, pix, dinheiro, transferências - SEM cartão de crédito)
+  // Despesas da conta corrente (debito, pix, dinheiro, transferencias - sem cartao de credito)
   const accountExpenses = transactions
     .filter((t) => t.type === 'expense' && !t.isCardCharge && t.status !== 'pending')
     .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
-  // Despesas no cartão de crédito
+  // Despesas no cartao de credito
   const cardExpenses = transactions
     .filter((t) => t.type === 'expense' && t.isCardCharge && t.status !== 'pending')
     .reduce((acc, t) => acc + Math.abs(t.amount), 0);
@@ -283,7 +265,7 @@ export const DashboardScreen: React.FC = () => {
   const cardAccess = checkLimit('card');
   const notificationAccess = checkLimit('notification');
 
-  // Contas e Faturas Próximas ao Vencimento
+  // Contas e faturas proximas ao vencimento
   const upcomingSubs = getUpcomingSubscriptions(subscriptions);
   const upcomingCards = cardAccess.allowed ? getUpcomingCardBills(cards) : [];
   const totalUpcomingCount = upcomingSubs.length + upcomingCards.length;
@@ -363,20 +345,20 @@ export const DashboardScreen: React.FC = () => {
     const dateStr = toApiDate(now);
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    // 1. Registrar transação de pagamento da fatura saindo da conta corrente
+    // Registrar transacao de pagamento da fatura saindo da conta corrente
     await transactionService.addTransaction({
       title:
         paymentType === 'total'
-          ? `Pagamento Fatura: ${card.name} (•••• ${card.finalDigits})`
-          : `Pagamento Parcial Fatura: ${card.name} (•••• ${card.finalDigits})`,
+          ? `Pagamento Fatura: ${card.name} (${MASKED_CARD_DIGITS} ${card.finalDigits})`
+          : `Pagamento Parcial Fatura: ${card.name} (${MASKED_CARD_DIGITS} ${card.finalDigits})`,
       amount: -paidAmount,
       date: dateStr,
-      category: 'Cartão de Crédito',
+      category: 'Cart\u00E3o de Cr\u00E9dito',
       type: 'expense',
       isCardCharge: false,
       status: 'paid',
       cardId: card.id,
-      cardName: `${card.name} (•••• ${card.finalDigits})`,
+      cardName: `${card.name} (${MASKED_CARD_DIGITS} ${card.finalDigits})`,
       installments: 1,
       currentInstallment: 1,
     });
@@ -392,12 +374,12 @@ export const DashboardScreen: React.FC = () => {
           title: `Parcelamento Fatura: ${card.name} (${i}/${installmentCount})`,
           amount: -installmentValue,
           date: instDateStr,
-          category: 'Cartão de Crédito',
+          category: 'Cart\u00E3o de Cr\u00E9dito',
           type: 'expense',
           isCardCharge: true,
           status: 'paid',
           cardId: card.id,
-          cardName: `${card.name} (•••• ${card.finalDigits})`,
+          cardName: `${card.name} (${MASKED_CARD_DIGITS} ${card.finalDigits})`,
           installments: installmentCount,
           currentInstallment: i,
         });
@@ -423,67 +405,74 @@ export const DashboardScreen: React.FC = () => {
   });
   const displayName = profile?.displayName || user?.displayName || '';
 
-  return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? '#121214' : '#f8fafc' }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
+  const firstName = (displayName || user?.email?.split('@')[0] || 'John').trim().split(/\s+/)[0];
+  const latestTransactions = [...transactions]
+    .filter((t) => t.status !== 'pending')
+    .sort((a, b) => {
+      const msA = getTransactionTimestamp(a);
+      const msB = getTransactionTimestamp(b);
+      if (msB !== msA) return msB - msA;
+      return (b.date || '').localeCompare(a.date || '');
+    })
+    .slice(0, 3);
+  const visibleGoals = goals.slice(0, 2);
+  const goalCardWidth = Math.max(150, Math.floor((screenWidth - 56) / 2));
 
-      {/* Purple Background Banner */}
-      <View style={[styles.purpleBanner, { height: 410 + insets.top }]} />
+  const openUpcomingBills = () => {
+    if (!alertAccess.allowed) {
+      triggerUpgrade?.('alert', alertAccess.reason);
+      return;
+    }
+    setIsUpcomingModalOpen(true);
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: isDarkMode ? '#121214' : '#FFFFFF' }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={isDarkMode ? '#121214' : '#FFFFFF'} />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 60 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.greetingText}>{greeting}</Text>
-              {!!displayName && (
-                <Text style={styles.userNameText}>
-                  {displayName}
-                </Text>
-              )}
+            <View style={styles.headerCopy}>
+              <Text style={[styles.homeTitle, { color: isDarkMode ? '#F8FAFC' : '#0A102B' }]} numberOfLines={1} adjustsFontSizeToFit>
+                {'Ol\u00E1, '}{firstName}! {'\uD83D\uDC4B'}
+              </Text>
+              <Text style={[styles.homeSubtitle, { color: isDarkMode ? '#A1A1AA' : '#687292' }]} numberOfLines={1}>
+                Que bom te ver de novo!
+              </Text>
             </View>
 
             <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.bellButton}
-                onPress={handleOpenNotifications}
-                activeOpacity={0.8}
-              >
-                <Bell size={20} color="#ffffff" />
+              <TouchableOpacity style={[styles.bellButton, { backgroundColor: isDarkMode ? '#1E1E26' : '#F3F5FA' }]} onPress={handleOpenNotifications} activeOpacity={0.82}>
+                <Bell size={22} color={isDarkMode ? '#E5E7EB' : '#545D78'} />
                 {notificationBadgeCount > 0 && (
-                  <View style={styles.notificationBadge}>
+                  <View style={styles.notificationDot}>
                     <Text style={styles.notificationBadgeText} numberOfLines={1}>
-                      {getNotificationBadgeLabel(notificationBadgeCount)}
+                      {notificationBadgeCount > 9 ? '9+' : getNotificationBadgeLabel(notificationBadgeCount)}
                     </Text>
                   </View>
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })}
-                activeOpacity={0.8}
-              >
-                <View style={styles.avatarBorder}>
-                  <Image
-                    source={{
-                      uri:
-                        profile?.photoURL ||
-                        user?.photoURL ||
-                        'https://api.dicebear.com/7.x/initials/png?seed=' +
-                          (profile?.displayName || user?.displayName || 'User'),
-                    }}
-                    style={styles.avatarImage}
-                  />
-                </View>
+              <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })} activeOpacity={0.82}>
+                <Image
+                  source={{
+                    uri:
+                      profile?.photoURL ||
+                      user?.photoURL ||
+                      'https://api.dicebear.com/7.x/initials/png?seed=' +
+                        (profile?.displayName || user?.displayName || user?.email || 'User'),
+                  }}
+                  style={styles.avatarImage}
+                />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Balance Card Section */}
           <BalanceSummaryCard
             period={monthYearLabel}
             balance={balance}
@@ -493,518 +482,128 @@ export const DashboardScreen: React.FC = () => {
             isDarkMode={isDarkMode}
             onToggleBalance={() => setShowBalance((visible) => !visible)}
           />
-          {/* Legacy balance markup retained below only during migration */}
-          {false && <View style={styles.balanceCard}>
-            <View style={styles.balanceHeaderRow}>
-              <View style={styles.balanceHeaderLeft}>
-                <Text style={styles.balanceLabel}>Saldo em Conta</Text>
-                <TouchableOpacity
-                  onPress={() => setShowBalance(!showBalance)}
-                  style={styles.eyeButton}
-                  activeOpacity={0.7}
-                >
-                  {showBalance ? (
-                    <Eye size={16} color="rgba(255, 255, 255, 0.85)" />
-                  ) : (
-                    <EyeOff size={16} color="rgba(255, 255, 255, 0.85)" />
-                  )}
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.monthLabel}>{monthYearLabel}</Text>
-            </View>
 
-            <Text style={styles.balanceAmount}>
-              R$ {showBalance ? balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '••••••'}
-            </Text>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={() => navigation.navigate('AddTransactionModal')} activeOpacity={0.86}>
+              <View style={styles.quickActionIconCircle}><Plus size={25} color="#FFFFFF" strokeWidth={2.6} /></View>
+              <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Adicionar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={() => navigation.navigate('MainTabs', { screen: 'Statement' })} activeOpacity={0.86}>
+              <Repeat2 size={28} color="#5748FF" strokeWidth={2.4} />
+              <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Transferir</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={openUpcomingBills} activeOpacity={0.86}>
+              <CreditCard size={27} color="#5748FF" strokeWidth={2.2} />
+              <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Pagar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })} activeOpacity={0.86}>
+              <MoreHorizontal size={30} color="#5748FF" strokeWidth={2.6} />
+              <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Mais</Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Incomes & Expenses Split Box */}
-            <View
-              style={[
-                styles.splitStatsBox,
-                {
-                  backgroundColor: isDarkMode ? '#1e1e26' : '#ffffff',
-                  borderColor: isDarkMode ? '#27272a' : '#f1f5f9',
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.statCol,
-                  styles.statColBorder,
-                  { borderRightColor: isDarkMode ? '#27272a' : '#f1f5f9' },
-                ]}
-              >
-                <View style={styles.incomeIconBox}>
-                  <TrendingUp size={16} color="#10b981" style={{ transform: [{ rotate: '180deg' }] }} />
-                </View>
-                <View style={styles.statInfo}>
-                  <Text style={[styles.statLabel, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
-                    RECEITAS
-                  </Text>
-                  <Text
-                    style={[styles.statValue, { color: isDarkMode ? '#f4f4f5' : '#111118' }]}
-                    numberOfLines={1}
-                  >
-                    R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.statCol}>
-                <View style={styles.expenseIconBox}>
-                  <TrendingUp size={16} color="#ef4444" />
-                </View>
-                <View style={styles.statInfo}>
-                  <Text style={[styles.statLabel, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
-                    DESPESAS
-                  </Text>
-                  <Text
-                    style={[styles.statValue, { color: isDarkMode ? '#f4f4f5' : '#111118' }]}
-                    numberOfLines={1}
-                  >
-                    R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>}
-
-          {/* Overlapping Warning Card for upcoming bills */}
           {totalUpcomingCount > 0 && (
-            <TouchableOpacity
-              onPress={() => {
-                if (!alertAccess.allowed) {
-                  triggerUpgrade?.('alert', alertAccess.reason);
-                  return;
-                }
-                setIsUpcomingModalOpen(true);
-              }}
-              style={[
-                styles.upcomingBillsCard,
-                {
-                  backgroundColor: isDarkMode ? '#1e1e26' : '#ffffff',
-                  borderColor: isDarkMode ? '#27272a' : '#f1f5f9',
-                },
-              ]}
-              activeOpacity={0.9}
-            >
-              <View style={styles.warningAlertBadge}>
-                <AlertCircle size={12} color="#ffffff" strokeWidth={3} />
-              </View>
-
+            <TouchableOpacity style={styles.upcomingBillsCard} onPress={openUpcomingBills} activeOpacity={0.9}>
+              <View style={styles.warningOuter}><View style={styles.warningAlertBadge}><AlertCircle size={26} color="#E11919" fill="#E11919" strokeWidth={2.6} /></View></View>
               <View style={styles.upcomingBillsContent}>
-                <View style={styles.upcomingBillsTitleRow}>
-                  <Text
-                    style={[
-                      styles.upcomingBillsTitle,
-                      { color: isDarkMode ? '#f4f4f5' : '#1c1c28' },
-                    ]}
-                  >
-                    {totalUpcomingCount}{' '}
-                    {totalUpcomingCount === 1 ? 'conta a pagar' : 'contas a pagar'}
-                  </Text>
-                  {upcomingCards.length > 0 && (
-                    <View style={styles.faturaBadge}>
-                      <Text style={styles.faturaBadgeText}>
-                        Cartao {upcomingCards.length}{' '}
-                        {upcomingCards.length === 1 ? 'fatura' : 'faturas'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.upcomingBillsDetails, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
-                  R$ {showBalance ? totalUpcomingAmount.toFixed(2).replace('.', ',') : '••••••'}{' '}
-                  {latestDueDate ? `| Vencimento: ${formatBrazilianDate(latestDueDate)}` : ''}
+                <Text style={styles.upcomingBillsTitle} numberOfLines={1}>
+                  {totalUpcomingCount} {totalUpcomingCount === 1 ? 'conta a pagar' : 'contas a pagar'}
+                </Text>
+                <Text style={styles.upcomingBillsDetails} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                  R$ {showBalance ? totalUpcomingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : MASKED_AMOUNT}
+                  {latestDueDate ? ` | Vencimento: ${formatBrazilianDate(latestDueDate)}` : ''}
                 </Text>
               </View>
-
-              <View
-                style={[
-                  styles.upcomingBillsChevron,
-                  { backgroundColor: isDarkMode ? '#27272a' : '#f8fafc' },
-                ]}
-              >
-                <ChevronRight size={16} color={isDarkMode ? '#71717a' : '#94a3b8'} />
-              </View>
+              <ChevronRight size={28} color={isDarkMode ? '#E5E7EB' : '#0A102B'} strokeWidth={2.6} />
             </TouchableOpacity>
           )}
 
-          {/* Content Area */}
-          <View
-            style={[
-              styles.contentSheet,
-              {
-                backgroundColor: isDarkMode ? '#121214' : '#ffffff',
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.sheetHandle,
-                { backgroundColor: isDarkMode ? '#27272a' : '#e2e8f0' },
-              ]}
-            />
-
-            {/* Section 1: Recent Transactions */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeaderRow}>
-                <Text
-                  style={[
-                    styles.sectionTitleText,
-                    { color: isDarkMode ? '#f4f4f5' : '#111118' },
-                  ]}
-                >
-                  Últimas Transações
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    navigation.navigate('MainTabs', { screen: 'Statement' })
-                  }
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.seeAllText}>Ver todas</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.itemsList}>
-                {[...transactions]
-                  .filter((t) => t.status !== 'pending')
-                  .sort((a, b) => {
-                    const msA = getTransactionTimestamp(a);
-                    const msB = getTransactionTimestamp(b);
-                    if (msB !== msA) return msB - msA;
-                    return (b.date || '').localeCompare(a.date || '');
-                  })
-                  .slice(0, 5)
-                  .map((item) => {
-                    const isIncome = item.type === 'income';
-                    return (
-                      <View
-                        key={item.id}
-                        style={[
-                          styles.transactionCard,
-                          {
-                            backgroundColor: isDarkMode ? '#1e1e26' : '#ffffff',
-                            borderColor: isDarkMode ? '#27272a' : '#f1f5f9',
-                          },
-                        ]}
-                      >
-                        <View style={styles.transactionLeft}>
-                          <TransactionIcon
-                            transaction={item}
-                            subscriptions={subscriptions}
-                          />
-                          <View style={styles.transactionInfo}>
-                            <View style={styles.transactionTitleRow}>
-                              <Text
-                                style={[
-                                  styles.transactionTitle,
-                                  { color: isDarkMode ? '#f4f4f5' : '#111118' },
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {item.title}
-                              </Text>
-                              <View
-                                style={[
-                                  styles.trendDot,
-                                  {
-                                    backgroundColor: isIncome ? '#10b981' : '#ef4444',
-                                  },
-                                ]}
-                              >
-                                <TrendingUp
-                                  size={9}
-                                  color="#ffffff"
-                                  style={isIncome ? { transform: [{ rotate: '180deg' }] } : {}}
-                                />
-                              </View>
-                            </View>
-
-                            <View style={styles.transactionMetaRow}>
-                              <Text
-                                style={[
-                                  styles.transactionDate,
-                                  { color: isDarkMode ? '#71717a' : '#94a3b8' },
-                                ]}
-                              >
-                                {formatTransactionDateTime(item)}
-                              </Text>
-                              {item.isCardCharge && (
-                                <View style={styles.cardTagBadge}>
-                                  <Text style={styles.cardTagBadgeText}>
-                                    Cartao {item.cardName ? item.cardName.split(' ')[0] : 'Cartão'}{' '}
-                                    {item.installments && item.installments > 1
-                                      ? `• Parcela ${item.currentInstallment || 1}/${item.installments}`
-                                      : '• À vista'}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-                        </View>
-
-                        <View style={styles.transactionRight}>
-                          <Text
-                            style={[
-                              styles.transactionAmount,
-                              { color: isIncome ? '#10b981' : '#ef4444' },
-                            ]}
-                          >
-                            {isIncome ? '+ ' : '- '}R${' '}
-                            {formatDashboardAmount(Math.abs(item.amount), showBalance, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.transactionCategory,
-                              { color: isDarkMode ? '#71717a' : '#94a3b8' },
-                            ]}
-                          >
-                            {item.category?.toLowerCase()}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-
-                {transactions.filter((t) => t.status !== 'pending').length === 0 && (
-                  <View style={styles.emptyCard}>
-                    <Text style={[styles.emptyCardText, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
-                      Nenhuma transação encontrada
-                    </Text>
-                  </View>
-                )}
-              </View>
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitleText, { color: isDarkMode ? '#F4F4F5' : '#0A102B' }]}>{'\u00DAltimas transa\u00E7\u00F5es'}</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Statement' })} activeOpacity={0.75}>
+                <Text style={styles.seeAllText}>Ver todas</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Section 2: Subscriptions */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeaderRow}>
-                <Text
-                  style={[
-                    styles.sectionTitleText,
-                    { color: isDarkMode ? '#f4f4f5' : '#111118' },
-                  ]}
-                >
-                  Assinaturas Recorrentes
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    navigation.navigate('Subscriptions')
-                  }
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.seeAllText}>Ver todas</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={[styles.transactionsGroupCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF', borderColor: isDarkMode ? '#2A2A32' : '#E8ECF4' }]}>
+              {latestTransactions.map((item, index) => {
+                const isIncome = item.type === 'income';
+                return (
+                  <View key={item.id} style={[styles.transactionRow, index < latestTransactions.length - 1 && { borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#2A2A32' : '#EEF1F6' }]}>
+                    <View style={styles.transactionLeft}>
+                      <TransactionIcon transaction={item} subscriptions={subscriptions} />
+                      <View style={styles.transactionInfo}>
+                        <Text style={[styles.transactionTitle, { color: isDarkMode ? '#F4F4F5' : '#0A102B' }]} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.transactionDate} numberOfLines={1}>{formatTransactionDateTime(item)}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.transactionRight}>
+                      <Text style={[styles.transactionAmount, { color: isIncome ? '#0FBF64' : '#E11919' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.76}>
+                        {isIncome ? '+ ' : '- '}R$ {formatDashboardAmount(Math.abs(item.amount), showBalance, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                      <Text style={styles.transactionCategory} numberOfLines={1}>{item.category}</Text>
+                    </View>
+                  </View>
+                );
+              })}
 
-              <View style={styles.itemsList}>
-                {subscriptions.slice(0, 3).map((item) => (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.subscriptionCard,
-                      {
-                        backgroundColor: isDarkMode ? '#1e1e26' : '#ffffff',
-                        borderColor: isDarkMode ? '#27272a' : '#f1f5f9',
-                      },
-                    ]}
+              {latestTransactions.length === 0 && (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyCardText}>Nenhuma transação encontrada</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitleText, { color: isDarkMode ? '#F4F4F5' : '#0A102B' }]}>Metas</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Goals')} activeOpacity={0.75}>
+                <Text style={styles.seeAllText}>Ver todas</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.goalsRow}>
+              {visibleGoals.map((goal, index) => {
+                const progressPct = Math.min(100, Math.max(0, (goal.currentAmount / (goal.targetAmount || 1)) * 100));
+                const GoalIcon = index % 2 === 0 ? Plane : Home;
+                const tone = index % 2 === 0 ? '#377DFF' : '#E11919';
+                const toneBg = index % 2 === 0 ? '#EEF3FF' : '#FFE9EA';
+                return (
+                  <TouchableOpacity
+                    key={goal.id}
+                    style={[styles.goalCard, { width: goalCardWidth, backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF', borderColor: isDarkMode ? '#2A2A32' : '#E8ECF4' }]}
+                    onPress={() => navigation.navigate('GoalDetail', { goalId: goal.id, title: goal.title })}
+                    activeOpacity={0.86}
                   >
-                    <View style={styles.subLeft}>
-                      <View
-                        style={[
-                          styles.subIconContainer,
-                          {
-                            backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
-                            borderColor: isDarkMode ? '#27272a' : '#f1f5f9',
-                          },
-                        ]}
-                      >
-                        <RemoteIcon
-                          uri={item.iconUrl || item.icon}
-                          size={26}
-                          fallback={
-                            <Image
-                              source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${item.name}` }}
-                              style={styles.subIcon}
-                              resizeMode="contain"
-                            />
-                          }
-                        />
-                      </View>
-                      <View>
-                        <Text
-                          style={[
-                            styles.subName,
-                            { color: isDarkMode ? '#f4f4f5' : '#1f2937' },
-                          ]}
-                        >
-                          {item.name}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.subNextDate,
-                            { color: isDarkMode ? '#71717a' : '#94a3b8' },
-                          ]}
-                        >
-                          Próx. Pagamento:{' '}
-                          <Text style={{ color: '#4f46e5', fontWeight: '800' }}>
-                            {formatBrazilianDate(item.nextBilling)}
-                          </Text>
-                        </Text>
-                      </View>
+                    <View style={[styles.goalIconBox, { backgroundColor: toneBg }]}>
+                      <GoalIcon size={24} color={tone} strokeWidth={2.5} />
                     </View>
-
-                    <View style={styles.subRight}>
-                      <Text
-                        style={[
-                          styles.subAmount,
-                          { color: isDarkMode ? '#f4f4f5' : '#111118' },
-                        ]}
-                      >
-                        R${' '}
-                        {formatDashboardAmount(item.amount, showBalance, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                    <View style={styles.goalTextBlock}>
+                      <Text style={[styles.goalTitle, { color: isDarkMode ? '#F4F4F5' : '#0A102B' }]} numberOfLines={1}>{goal.title}</Text>
+                      <Text style={[styles.goalCurrentAmount, { color: isDarkMode ? '#F4F4F5' : '#0A102B' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.76}>
+                        R$ {formatDashboardAmount(goal.currentAmount, showBalance, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Text>
-                      <Text
-                        style={[
-                          styles.subPeriod,
-                          { color: isDarkMode ? '#71717a' : '#94a3b8' },
-                        ]}
-                      >
-                        {item.period}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-
-                {subscriptions.length === 0 && (
-                  <View style={styles.emptyCard}>
-                    <Text style={[styles.emptyCardText, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
-                      Nenhuma assinatura encontrada
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            {/* Section 3: Goals */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeaderRow}>
-                <Text
-                  style={[
-                    styles.sectionTitleText,
-                    { color: isDarkMode ? '#f4f4f5' : '#111118' },
-                  ]}
-                >
-                  Metas
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    navigation.navigate('Goals')
-                  }
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.seeAllText}>Ver todas</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.goalsHorizontalList}
-              >
-                {goals.map((goal) => {
-                  const progressPct = Math.min(
-                    100,
-                    Math.max(0, (goal.currentAmount / (goal.targetAmount || 1)) * 100)
-                  );
-                  return (
-                    <TouchableOpacity
-                      key={goal.id}
-                      style={[
-                        styles.goalCard,
-                        {
-                          backgroundColor: isDarkMode ? '#1e1e26' : '#ffffff',
-                          borderColor: isDarkMode ? '#27272a' : '#f1f5f9',
-                        },
-                      ]}
-                      onPress={() =>
-                        navigation.navigate('GoalDetail', {
-                          goalId: goal.id,
-                          title: goal.title,
-                        })
-                      }
-                      activeOpacity={0.85}
-                    >
-                      <View style={styles.goalHeaderRow}>
-                        <Text
-                          style={[
-                            styles.goalTitle,
-                            { color: isDarkMode ? '#71717a' : '#94a3b8' },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {goal.title}
-                        </Text>
-                        <ChevronRight size={14} color={isDarkMode ? '#52525b' : '#cbd5e1'} />
-                      </View>
-
-                      <Text
-                        style={[
-                          styles.goalCurrentAmount,
-                          { color: isDarkMode ? '#f4f4f5' : '#1c1c28' },
-                        ]}
-                      >
-                        R$ {formatDashboardAmount(goal.currentAmount, showBalance)}
-                      </Text>
-
-                      {/* Progress bar */}
+                      <Text style={styles.goalProgressText}>{Math.round(progressPct)}% completo</Text>
                       <View style={styles.goalProgressBarBg}>
-                        <View
-                          style={[styles.goalProgressBarFill, { width: `${progressPct}%` }]}
-                        />
+                        <View style={[styles.goalProgressBarFill, { width: `${progressPct}%` }]} />
                       </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
 
-                      <Text
-                        style={[
-                          styles.goalTargetText,
-                          { color: isDarkMode ? '#71717a' : '#94a3b8' },
-                        ]}
-                      >
-                        META: R$ {formatDashboardAmount(goal.targetAmount, showBalance)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {goals.length === 0 && (
-                  <View
-                    style={[
-                      styles.emptyGoalsContainer,
-                      {
-                        borderColor: isDarkMode ? '#27272a' : '#e2e8f0',
-                        width: Math.max(0, screenWidth - 40),
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.emptyCardText, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
-                      Nenhuma meta cadastrada
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
+              {visibleGoals.length === 0 && (
+                <View style={[styles.emptyGoalsContainer, { borderColor: isDarkMode ? '#2A2A32' : '#E8ECF4', width: Math.max(0, screenWidth - 44) }]}>
+                  <Text style={styles.emptyCardText}>Nenhuma meta cadastrada</Text>
+                </View>
+              )}
             </View>
           </View>
         </ScrollView>
       </SafeAreaView>
 
-      {/* Modals */}
       <UpcomingBillsModal
         isOpen={isUpcomingModalOpen}
         onClose={() => setIsUpcomingModalOpen(false)}
@@ -1036,14 +635,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  purpleBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 420,
-    backgroundColor: '#4F46E5',
-  },
   safeArea: {
     flex: 1,
   },
@@ -1051,458 +642,284 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 0,
+    paddingTop: 18,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+    gap: 14,
+    paddingHorizontal: 22,
+    marginBottom: 16,
   },
-  greetingText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 2,
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
   },
-  userNameText: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: -0.3,
+  homeTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontFamily: 'Inter-Bold',
+  },
+  homeSubtitle: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontFamily: 'Inter-Regular',
+    marginTop: 1,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   bellButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  notificationBadge: {
+  notificationDot: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    backgroundColor: '#ef4444',
-    borderWidth: 2,
-    borderColor: '#4F46E5',
+    top: 11,
+    right: 10,
+    minWidth: 10,
+    height: 10,
+    borderRadius: 5,
+    paddingHorizontal: 2,
+    backgroundColor: '#E11919',
     alignItems: 'center',
     justifyContent: 'center',
   },
   notificationBadgeText: {
-    fontSize: 9,
-    lineHeight: 11,
-    fontWeight: '900',
-    color: '#ffffff',
-  },
-  avatarBorder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-    overflow: 'hidden',
+    fontSize: 7,
+    lineHeight: 8,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
   },
   avatarImage: {
-    width: '100%',
-    height: '100%',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#E8ECF4',
   },
-  balanceCard: {
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 18,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  balanceHeaderRow: {
+  quickActionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  balanceHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  balanceLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  eyeButton: {
-    padding: 2,
-  },
-  monthLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
-    textTransform: 'capitalize',
-  },
-  balanceAmount: {
-    fontSize: 30,
-    fontWeight: '900',
-    color: '#ffffff',
-    letterSpacing: -0.5,
+    gap: 12,
+    paddingHorizontal: 22,
     marginBottom: 16,
   },
-  splitStatsBox: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statCol: {
+  quickActionCard: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    gap: 10,
-  },
-  statColBorder: {
-    borderRightWidth: 1,
-  },
-  incomeIconBox: {
-    width: 32,
-    height: 32,
+    height: 76,
     borderRadius: 16,
-    backgroundColor: '#ecfdf5',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
   },
-  expenseIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fee2e2',
+  quickActionIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#5748FF',
   },
-  statInfo: {
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-  },
-  statValue: {
+  quickActionLabel: {
     fontSize: 12,
-    fontWeight: '900',
-    marginTop: 2,
+    lineHeight: 16,
+    fontFamily: 'Inter-Regular',
   },
   upcomingBillsCard: {
-    marginHorizontal: 20,
+    marginHorizontal: 22,
+    minHeight: 66,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#FFF0F0',
+    marginBottom: 22,
   },
-  warningAlertBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#ef4444',
+  warningOuter: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFD8DD',
     marginRight: 12,
+  },
+  warningAlertBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   upcomingBillsContent: {
     flex: 1,
-  },
-  upcomingBillsTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    minWidth: 0,
   },
   upcomingBillsTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  faturaBadge: {
-    backgroundColor: '#eef2ff',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  faturaBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#6c5ce7',
+    color: '#0A102B',
+    fontSize: 16,
+    lineHeight: 21,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 3,
   },
   upcomingBillsDetails: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  upcomingBillsChevron: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contentSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 60,
-    minHeight: 500,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 24,
+    color: '#687292',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: 'Inter-Regular',
   },
   sectionContainer: {
-    marginBottom: 28,
+    marginBottom: 22,
+    paddingHorizontal: 22,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   sectionTitleText: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 20,
+    lineHeight: 25,
+    fontFamily: 'Inter-Bold',
   },
   seeAllText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#4f46e5',
+    fontSize: 16,
+    lineHeight: 21,
+    fontFamily: 'Inter-Bold',
+    color: '#5748FF',
   },
-  itemsList: {
-    gap: 10,
+  transactionsGroupCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
-  transactionCard: {
+  transactionRow: {
+    minHeight: 70,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
   },
   transactionLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flex: 1,
     marginRight: 8,
   },
   transactionInfo: {
     flex: 1,
-  },
-  transactionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    minWidth: 0,
   },
   transactionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    flex: 1,
-  },
-  trendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  transactionMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-    flexWrap: 'wrap',
+    fontSize: 16,
+    lineHeight: 21,
+    fontFamily: 'Inter-Bold',
   },
   transactionDate: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  cardTagBadge: {
-    backgroundColor: 'rgba(108, 92, 231, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  cardTagBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#6c5ce7',
+    color: '#687292',
+    fontSize: 13,
+    lineHeight: 17,
+    fontFamily: 'Inter-Regular',
+    marginTop: 2,
   },
   transactionRight: {
     alignItems: 'flex-end',
+    maxWidth: '43%',
   },
   transactionAmount: {
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 16,
+    lineHeight: 21,
+    fontFamily: 'Inter-Bold',
   },
   transactionCategory: {
-    fontSize: 9,
-    fontWeight: '800',
-    marginTop: 1,
+    color: '#687292',
+    fontSize: 13,
+    lineHeight: 17,
+    fontFamily: 'Inter-Regular',
+    marginTop: 2,
+    textAlign: 'right',
   },
   emptyCard: {
-    padding: 24,
+    padding: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyCardText: {
-    fontSize: 12,
-    fontWeight: '600',
+    color: '#687292',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Inter-Regular',
   },
-  subscriptionCard: {
+  goalsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  subLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  subIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  subIcon: {
-    width: 26,
-    height: 26,
-  },
-  subName: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  subNextDate: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  subRight: {
-    alignItems: 'flex-end',
-  },
-  subAmount: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  subPeriod: {
-    fontSize: 9,
-    fontWeight: '800',
-    marginTop: 1,
-  },
-  goalsHorizontalList: {
-    gap: 12,
-    paddingRight: 10,
+    gap: 14,
   },
   goalCard: {
-    width: 170,
-    padding: 14,
-    borderRadius: 20,
+    minHeight: 92,
+    borderRadius: 16,
     borderWidth: 1,
-  },
-  goalHeaderRow: {
+    padding: 12,
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  goalIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    justifyContent: 'center',
+  },
+  goalTextBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   goalTitle: {
-    fontSize: 9,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    flex: 1,
+    fontSize: 13,
+    lineHeight: 17,
+    fontFamily: 'Inter-Regular',
   },
   goalCurrentAmount: {
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 8,
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: 'Inter-Bold',
+    marginTop: 2,
+  },
+  goalProgressText: {
+    color: '#687292',
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Inter-Regular',
+    marginTop: 1,
   },
   goalProgressBarBg: {
-    height: 4,
-    backgroundColor: 'rgba(79, 70, 229, 0.15)',
-    borderRadius: 2,
+    height: 6,
+    backgroundColor: '#E7EAF0',
+    borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: 6,
+    marginTop: 8,
   },
   goalProgressBarFill: {
     height: '100%',
-    backgroundColor: '#4f46e5',
-    borderRadius: 2,
-  },
-  goalTargetText: {
-    fontSize: 9,
-    fontWeight: '800',
+    backgroundColor: '#5748FF',
+    borderRadius: 3,
   },
   emptyGoalsContainer: {
-    padding: 24,
+    padding: 22,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderRadius: 20,
+    borderRadius: 16,
   },
 });
-
-
-
-
-
-
-

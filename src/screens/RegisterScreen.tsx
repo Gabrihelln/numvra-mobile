@@ -1,36 +1,45 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { appleAuth } from '@invertase/react-native-apple-authentication';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ChevronLeft } from 'lucide-react-native';
-import { Logo } from '../components/common/Logo';
+import { ChevronLeft, Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  AuthInput,
+  BlobCopy,
+  BottomWaves,
+  BrandLockup,
+  PrimaryAuthButton,
+  SocialButton,
+  TopBlob,
+  authStyles as styles,
+} from '../components/auth/AuthScaffold';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthStackParamList } from '../navigation/types';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
+type AuthLoadingType = 'email' | 'google' | 'apple' | null;
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle, signInWithApple } = useAuth();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loadingType, setLoadingType] = useState<AuthLoadingType>(null);
   const [error, setError] = useState('');
+  const [isAppleAvailable, setIsAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    setIsAppleAvailable(appleAuth.isSupported);
+  }, []);
 
   const handleRegister = async () => {
     if (!name.trim() || !email.trim() || !password || !confirmPassword) {
@@ -48,12 +57,11 @@ export const RegisterScreen: React.FC = () => {
       return;
     }
 
-    setLoading(true);
+    setLoadingType('email');
     setError('');
 
     try {
       await signUp(name.trim(), email.trim(), password);
-      // Auth state update handles the redirection automatically
     } catch (err: any) {
       console.error('Registration error:', err);
       if (err.code === 'auth/email-already-in-use') {
@@ -64,268 +72,136 @@ export const RegisterScreen: React.FC = () => {
         setError('Falha ao criar conta. Tente novamente.');
       }
     } finally {
-      setLoading(false);
+      setLoadingType(null);
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setLoadingType('google');
+    setError('');
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      console.error('Google register error:', err);
+      setError(err?.message || 'Falha ao cadastrar com Google. Tente novamente.');
+    } finally {
+      setLoadingType(null);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setLoadingType('apple');
+    setError('');
+    try {
+      await signInWithApple();
+    } catch (err: any) {
+      if (err?.code !== 'ERR_REQUEST_CANCELED') {
+        console.error('Apple register error:', err);
+        setError(err?.message || 'Falha ao cadastrar com Apple. Tente novamente.');
+      }
+    } finally {
+      setLoadingType(null);
+    }
+  };
+
+  const isLoading = loadingType !== null;
+
   return (
-    <KeyboardAvoidingView
-      style={[
-        styles.container,
-        { backgroundColor: '#FFFFFF' },
-      ]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TopBlob>
+        <BlobCopy light={'Pequenos\npassos,'} strong={'grandes\nconquistas.'} />
+      </TopBlob>
+      <BottomWaves />
+
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: Math.max(insets.top, 16) + 8,
-            paddingBottom: Math.max(insets.bottom, 16) + 16,
+            paddingTop: Math.max(insets.top, 22) + 4,
+            paddingBottom: Math.max(insets.bottom, 18) + 56,
           },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={[
-              styles.backButton,
-              {
-                borderColor: '#F1F1F5',
-                backgroundColor: '#FAFAFC',
-              },
-            ]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <ChevronLeft
-              size={20}
-              color="#374151"
-            />
-          </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
+          <ChevronLeft size={20} color="#090F2D" strokeWidth={2.4} />
+        </TouchableOpacity>
 
-          <Logo width={36} height={36} />
+        <BrandLockup />
+
+        <View style={styles.hero}>
+          <Text style={styles.eyebrow}>CRIE SUA CONTA</Text>
+          <Text style={styles.title}>É rápido e gratuito.</Text>
+          <Text style={styles.subtitle}>Vamos começar? Preencha os dados abaixo para criar sua conta.</Text>
         </View>
 
-        {/* Title */}
-        <Text
-          style={[
-            styles.title,
-            { color: '#111827' },
-          ]}
-        >
-          Olá! Cadastre-se para começar.
-        </Text>
-
-        {/* Error message */}
         {!!error && (
-          <View
-            style={[
-              styles.errorBox,
-              {
-                backgroundColor: '#FEF2F2',
-              },
-            ]}
-          >
+          <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
 
-        {/* Form fields */}
-        <View style={styles.formGroup}>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: '#F8FAFC',
-                color: '#111827',
-                borderColor: '#E2E8F0',
-              },
-            ]}
-            placeholder="Seu Nome"
-            placeholderTextColor="#9CA3AF"
+        <View style={styles.registerFormGroup}>
+          <AuthInput
+            icon={<Lock size={21} color="#111936" strokeWidth={2.1} />}
+            placeholder="Seu nome completo"
             value={name}
             onChangeText={setName}
             autoCapitalize="words"
           />
-
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: '#F8FAFC',
-                color: '#111827',
-                borderColor: '#E2E8F0',
-              },
-            ]}
-            placeholder="Seu Email"
-            placeholderTextColor="#9CA3AF"
+          <AuthInput
+            icon={<Mail size={20} color="#111936" strokeWidth={2.1} />}
+            placeholder="Seu email"
             value={email}
             onChangeText={setEmail}
-            autoCapitalize="none"
             keyboardType="email-address"
           />
-
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: '#F8FAFC',
-                color: '#111827',
-                borderColor: '#E2E8F0',
-              },
-            ]}
-            placeholder="Sua senha (mínimo 6 caracteres)"
-            placeholderTextColor="#9CA3AF"
+          <AuthInput
+            icon={<Lock size={21} color="#111936" strokeWidth={2.1} />}
+            placeholder="Sua senha"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureTextEntry={!showPassword}
+            right={
+              <Pressable onPress={() => setShowPassword((current) => !current)} style={styles.eyeButton} hitSlop={8}>
+                {showPassword ? <EyeOff size={22} color="#111936" /> : <Eye size={22} color="#111936" />}
+              </Pressable>
+            }
           />
-
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: '#F8FAFC',
-                color: '#111827',
-                borderColor: '#E2E8F0',
-              },
-            ]}
+          <AuthInput
+            icon={<Lock size={21} color="#111936" strokeWidth={2.1} />}
             placeholder="Confirme sua senha"
-            placeholderTextColor="#9CA3AF"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            secureTextEntry
+            secureTextEntry={!showConfirmPassword}
+            right={
+              <Pressable onPress={() => setShowConfirmPassword((current) => !current)} style={styles.eyeButton} hitSlop={8}>
+                {showConfirmPassword ? <EyeOff size={22} color="#111936" /> : <Eye size={22} color="#111936" />}
+              </Pressable>
+            }
           />
         </View>
 
-        {/* Submit button */}
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            {
-              backgroundColor: '#111827',
-              opacity: loading ? 0.7 : 1,
-            },
-          ]}
-          onPress={handleRegister}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          {loading ? (
-            <ActivityIndicator
-              size="small"
-              color="#FFFFFF"
-            />
-          ) : (
-            <Text
-              style={[
-                styles.submitButtonText,
-                { color: '#FFFFFF' },
-              ]}
-            >
-              Cadastrar
-            </Text>
-          )}
-        </TouchableOpacity>
+        <PrimaryAuthButton label="Cadastrar" loading={loadingType === 'email'} disabled={isLoading} onPress={handleRegister} />
 
-        {/* Login footer link */}
-        <View style={styles.footer}>
-          <Text
-            style={[
-              styles.footerText,
-              { color: '#4B5563' },
-            ]}
-          >
-            Já tem uma conta?{' '}
-            <Text
-              style={styles.loginLink}
-              onPress={() => navigation.navigate('Login')}
-            >
-              Faça login agora.
-            </Text>
-          </Text>
+        <View style={styles.socialSection}>
+          <View style={styles.dividerRow}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>Ou cadastre com</Text>
+            <View style={styles.divider} />
+          </View>
+          <View style={styles.socialRow}>
+            <SocialButton provider="google" loading={loadingType === 'google'} disabled={isLoading} onPress={handleGoogleLogin} />
+            <SocialButton
+              provider="apple"
+              loading={loadingType === 'apple'}
+              disabled={isLoading || (Platform.OS === 'ios' && !isAppleAvailable)}
+              onPress={handleAppleLogin}
+            />
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 28,
-  },
-  backButton: {
-    padding: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    lineHeight: 32,
-    marginBottom: 24,
-  },
-  errorBox: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#EF4444',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  formGroup: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  input: {
-    height: 52,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    borderWidth: 1,
-  },
-  submitButton: {
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: 24,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  footer: {
-    marginTop: 'auto',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  footerText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  loginLink: {
-    color: '#6C5CE7',
-    fontWeight: '700',
-  },
-});

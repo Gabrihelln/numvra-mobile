@@ -24,10 +24,49 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export type AccountSource = 'manual' | 'open_finance';
+export type AccountKind = 'bank' | 'wallet' | 'cash' | 'investment';
+export type BankAccountType = 'checking' | 'savings' | 'salary' | 'payment' | 'investment' | 'cash';
+export type OpenFinanceStatus = 'not_connected' | 'pending' | 'active' | 'expired' | 'revoked' | 'error';
+
+export interface Account {
+  id: string;
+  userId?: string;
+  name: string;
+  accountType: BankAccountType;
+  accountKind: AccountKind;
+  institutionId: string;
+  institutionName: string;
+  institutionIcon?: string;
+  agency?: string;
+  accountNumber?: string;
+  balance: number;
+  currency: 'BRL';
+  source: AccountSource;
+  openFinanceProviderId?: string;
+  openFinanceConsentId?: string;
+  openFinanceStatus?: OpenFinanceStatus;
+  isManual: boolean;
+  isActive: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface TransactionEvent {
+  id: string;
+  type: 'created' | 'updated' | 'processed' | 'confirmed' | 'cancelled' | 'duplicated';
+  title: string;
+  description?: string;
+  notes?: string;
+  createdAt?: any;
+  createdMs?: number;
+}
+
 export interface Transaction {
   id: string;
   title?: string;
   description?: string;
+  notes?: string;
   amount: number;
   date: string;
   category: string;
@@ -35,17 +74,27 @@ export interface Transaction {
   type: 'income' | 'expense';
   icon?: string;
   status?: string;
+  publicId?: string;
   isCardCharge?: boolean;
   cardId?: string;
   cardName?: string;
   paymentMethod?: string;
+  sourceType?: 'account' | 'card';
+  sourceName?: string;
   installments?: number;
   currentInstallment?: number;
+  installmentGroupId?: string;
+  installmentNumber?: number;
+  installmentTotal?: number;
+  parentTransactionId?: string;
   isRecurring?: boolean;
+  recurrencePeriod?: 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+  nextBilling?: string;
   userId?: string;
   createdMs?: number;
   createdAt?: any;
   updatedAt?: any;
+  transactionEvents?: TransactionEvent[];
 }
 
 export interface CreditCardType {
@@ -87,6 +136,7 @@ export interface Subscription {
   color?: string;
   category?: string;
   status?: 'active' | 'canceled' | 'paused';
+  reminderEnabled?: boolean;
   userId?: string;
   createdAt?: any;
   updatedAt?: any;
@@ -144,6 +194,9 @@ export interface BudgetCategory {
   limitAmount?: number;
   icon?: string;
   color?: string;
+  backgroundColor?: string;
+  description?: string;
+  aliases?: string[];
   type?: 'income' | 'expense';
   active?: boolean;
   isActive?: boolean;

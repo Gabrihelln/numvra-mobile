@@ -1,8 +1,8 @@
 import type { LucideIcon } from 'lucide-react-native';
 import {
-  Banknote, Bot, Bus, Calendar, Car, Cloud, CreditCard, Film, Gift,
-  GraduationCap, HeartPulse, Home, Music, PlayCircle, Plus, ShoppingCart,
-  Tag, Theater, Trophy, Tv, Utensils, Wallet,
+  Banknote, BarChart3, Bot, Briefcase, Bus, Calendar, Car, Cloud, CreditCard, Film, Gift,
+  Gamepad2, GraduationCap, Heart, HeartPulse, Home, MoreHorizontal, Music, PlayCircle, Plus, ReceiptText, Send, ShoppingBag, ShoppingCart,
+  Tag, Theater, Trophy, Tv, Utensils, Wallet, Wrench,
 } from 'lucide-react-native';
 
 const FALLBACK_COLOR = '#6b7280';
@@ -13,13 +13,15 @@ export const normalizeIconName = (value?: string) =>
 const icons: Record<string, LucideIcon> = {
   home: Home, house: Home, casa: Home, moradia: Home, aluguel: Home,
   utensils: Utensils, comida: Utensils, alimentacao: Utensils,
-  heartpulse: HeartPulse, saude: HeartPulse,
-  bus: Bus, transporte: Bus, trans: Bus, car: Car,
-  theater: Theater, film: Film, lazer: Theater,
+  heart: Heart, heartpulse: HeartPulse, saude: Heart,
+  bus: Bus, transporte: Car, trans: Car, car: Car,
+  theater: Theater, film: Film, lazer: Gamepad2, gamepad2: Gamepad2,
   graduationcap: GraduationCap, educacao: GraduationCap,
   banknote: Banknote, salario: Banknote, trophy: Trophy, calendar: Calendar,
   gift: Gift, wallet: Wallet, creditcard: CreditCard, tv: Tv, music: Music,
-  shoppingcart: ShoppingCart, playcircle: PlayCircle, cloud: Cloud, bot: Bot,
+  shoppingcart: ShoppingCart, shoppingbag: ShoppingBag, compras: ShoppingBag, playcircle: PlayCircle, cloud: Cloud, bot: Bot,
+  wrench: Wrench, servicos: Wrench, morehorizontal: MoreHorizontal, receipttext: ReceiptText, impostos: ReceiptText,
+  barchart3: BarChart3, investimentos: BarChart3, briefcase: Briefcase, freelancer: Briefcase, send: Send, pix: Send,
   tag: Tag, plus: Plus,
 };
 
@@ -47,10 +49,16 @@ export const getCategoryVisual = (iconName?: string, color?: string, isDarkMode 
 };
 
 export const CATEGORY_ICON_PRESETS = [
-  { key: 'home', label: 'Moradia / Casa', color: '#f97316' },
-  { key: 'utensils', label: 'Alimentação', color: '#3b82f6' },
-  { key: 'heart-pulse', label: 'Saúde', color: '#14b8a6' },
-  { key: 'bus', label: 'Transporte', color: '#f59e0b' },
-  { key: 'theater', label: 'Lazer', color: '#a855f7' },
-  { key: 'graduation-cap', label: 'Educação', color: '#f43f5e' },
+  { key: 'utensils', label: 'Alimentação', color: '#FF3B5F' },
+  { key: 'car', label: 'Transporte', color: '#0B73F6' },
+  { key: 'home', label: 'Moradia', color: '#6C2EFF' },
+  { key: 'heart', label: 'Saúde', color: '#F43F68' },
+  { key: 'graduation-cap', label: 'Educação', color: '#16C784' },
+  { key: 'gamepad-2', label: 'Lazer', color: '#FF8A00' },
+  { key: 'shopping-bag', label: 'Compras', color: '#F43F76' },
+  { key: 'wrench', label: 'Serviços', color: '#0B73F6' },
+  { key: 'credit-card', label: 'Assinaturas', color: '#7B2CFF' },
+  { key: 'banknote', label: 'Salário', color: '#16C784' },
+  { key: 'briefcase', label: 'Freelancer', color: '#16C784' },
+  { key: 'more-horizontal', label: 'Outros', color: '#9AA0C3' },
 ];

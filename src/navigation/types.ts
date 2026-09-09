@@ -5,13 +5,17 @@ export type RootStackParamList = {
   Auth: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   GoalDetail: { goalId: string; title?: string };
+  TransactionDetail: { transactionId: string };
   Budget: undefined;
   Plan: undefined;
   Settings: undefined;
   Help: undefined;
+  AddAccount: undefined;
+  Categories: undefined;
+  CategoryLimits: undefined;
   Subscriptions: undefined;
   Goals: undefined;
-  AddTransactionModal: undefined;
+  AddTransactionModal: { transaction?: import('../types').Transaction } | undefined;
   AddCardModal: undefined;
   AddGoalModal: undefined;
   AddSubscriptionModal: undefined;

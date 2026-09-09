@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Alert, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
@@ -23,7 +23,7 @@ const AppContent: React.FC = () => {
       const body = message.notification?.body || message.data?.body || message.data?.message;
 
       if (title || body) {
-        Alert.alert(String(title || 'Notificacao'), String(body || ''));
+        Alert.alert(String(title || 'Notificação'), String(body || ''));
       }
     });
     const unsubscribeOpened = pushNotificationService.listenToNotificationOpens(() => {});
