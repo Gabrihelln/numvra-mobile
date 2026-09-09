@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -59,6 +59,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [silentMode, setSilentMode] = useState(false);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isOpen || !user) {
@@ -79,11 +80,31 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
       }
     );
 
-    return unsubscribe;
+        const unsubscribeReads = pushNotificationService.listenToNotificationReads(
+      user.uid,
+      setReadIds,
+      () => setReadIds(new Set())
+    );
+
+    return () => {
+      unsubscribe();
+      unsubscribeReads();
+    };
   }, [isOpen, user]);
 
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    const visibleNotifications = notifications.map((notification) => ({
+    ...notification,
+    read: notification.read || readIds.has(notification.id),
+  }));
+
+  const handleMarkRead = async (notificationId: string) => {
+    if (!user) return;
+    await pushNotificationService.markNotificationRead(user.uid, notificationId);
+  };
+
+  const handleMarkAllRead = async () => {
+    if (!user) return;
+    await pushNotificationService.markAllNotificationsRead(user.uid, notifications);
   };
 
   return (
@@ -138,7 +159,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
             </TouchableOpacity>
 
             <Text style={[styles.headerTitle, { color: isDarkMode ? '#f4f4f5' : '#1c1c28' }]}>
-              Notificacoes
+              Notificações
             </Text>
 
             <View style={styles.headerSpacer} />
@@ -152,7 +173,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
               <Text style={[styles.sectionTitle, { color: isDarkMode ? '#71717a' : '#94a3b8' }]}>
                 RECENTES
               </Text>
-              {notifications.length > 0 && (
+              {visibleNotifications.length > 0 && (
                 <TouchableOpacity onPress={handleMarkAllRead} activeOpacity={0.7}>
                   <Text style={styles.markReadText}>Marcar todas como lidas</Text>
                 </TouchableOpacity>
@@ -163,10 +184,10 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
               <View style={styles.emptyState}>
                 <ActivityIndicator color="#6c5ce7" />
                 <Text style={[styles.emptyText, { color: isDarkMode ? '#a1a1aa' : '#64748b' }]}>
-                  Carregando notificacoes
+                  Carregando Notificações
                 </Text>
               </View>
-            ) : notifications.length === 0 ? (
+            ) : visibleNotifications.length === 0 ? (
               <View
                 style={[
                   styles.emptyState,
@@ -181,12 +202,12 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                   Nenhuma notificacao
                 </Text>
                 <Text style={[styles.emptyText, { color: isDarkMode ? '#a1a1aa' : '#64748b' }]}>
-                  Os avisos do Numvra aparecerao aqui quando estiverem disponiveis.
+                  Os avisos do Numvra aparecerao aqui quando estiverem disponíveis.
                 </Text>
               </View>
             ) : (
               <View style={styles.notificationsList}>
-                {notifications.map((notif) => {
+                {visibleNotifications.map((notif) => {
                   let borderLeftColor = '#5856D6';
                   let iconBg = isDarkMode ? 'rgba(91, 76, 216, 0.2)' : '#eef2ff';
                   let iconColor = '#5856D6';
@@ -205,8 +226,10 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                   }
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={notif.id}
+                      onPress={() => handleMarkRead(notif.id)}
+                      activeOpacity={0.82}
                       style={[
                         styles.notificationCard,
                         {
@@ -253,7 +276,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                           {notif.text}
                         </Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -290,7 +313,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                         { color: isDarkMode ? '#f4f4f5' : '#1c1c28' },
                       ]}
                     >
-                      Gerenciar Notificacoes
+                      Gerenciar Notificações
                     </Text>
                   </View>
                   <ChevronRight size={18} color={isDarkMode ? '#71717a' : '#cbd5e1'} />
@@ -504,3 +527,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+

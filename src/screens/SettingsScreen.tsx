@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import {
   Bell,
   Globe,
@@ -21,9 +22,27 @@ import { BackButton } from '../components/common/BackButton';
 import { useAuth } from '../contexts/AuthContext';
 import { pushNotificationService, PushPermissionStatus } from '../services/pushNotificationService';
 
+const SECTION_TITLE: Record<string, string> = {
+  appearance: 'Aparência',
+  notifications: 'Notificações',
+  language: 'Idioma',
+  security: 'Segurança',
+  general: 'Ajustes',
+};
+
+const SECTION_SUBTITLE: Record<string, string> = {
+  appearance: 'Tema e conforto visual.',
+  notifications: 'Preferências de alertas e lembretes.',
+  language: 'Português (Brasil) é o idioma disponível nesta versão.',
+  security: 'Privacidade e controles de conta disponíveis.',
+  general: 'Preferências do aplicativo.',
+};
+
 export const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { isDarkMode, toggleTheme } = useTheme();
+  const route = useRoute<any>();
+  const section = route.params?.section || 'general';
   const { user, checkLimit } = useAuth();
   const notificationAccess = checkLimit('notification');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -51,21 +70,21 @@ export const SettingsScreen: React.FC = () => {
   }, [user]);
 
   const getNotificationSubtitle = () => {
-    if (!user) return 'Entre na sua conta para ativar notificacoes';
-    if (notificationsSaving) return 'Salvando preferencias';
-    if (notificationsEnabled) return 'Notificacoes e alertas ativos';
-    if (permissionStatus === 'denied') return 'Permissao negada nas configuracoes do sistema';
+    if (!user) return 'Entre na sua conta para ativar notificações';
+    if (notificationsSaving) return 'Salvando preferências';
+    if (notificationsEnabled) return 'Notificações e alertas ativos';
+    if (permissionStatus === 'denied') return 'Permissão negada nas configurações do sistema';
     return 'Receba avisos importantes no dispositivo';
   };
 
   const handleNotificationsChange = async (value: boolean) => {
     if (!notificationAccess.allowed) {
-      Alert.alert('Recurso indisponivel', notificationAccess.reason);
+      Alert.alert('Recurso indisponível', notificationAccess.reason);
       return;
     }
 
     if (!user) {
-      Alert.alert('Login necessario', 'Entre na sua conta para ativar notificacoes.');
+      Alert.alert('Login necessário', 'Entre na sua conta para ativar notificações.');
       return;
     }
 
@@ -80,13 +99,13 @@ export const SettingsScreen: React.FC = () => {
 
       if (value && preference.permissionStatus !== 'authorized') {
         Alert.alert(
-          'Permissao negada',
-          'Nao foi possivel ativar notificacoes. Libere as notificacoes nas configuracoes do sistema.'
+          'Permissão negada',
+          'Não foi possivel ativar notificações. Libere as notificações nas configurações do sistema.'
         );
       }
     } catch (err) {
       console.error('Failed to update push notifications:', err);
-      Alert.alert('Erro', 'Nao foi possivel atualizar as notificacoes agora.');
+      Alert.alert('Erro', 'Não foi possível atualizar as notificações agora.');
     } finally {
       setNotificationsSaving(false);
     }
@@ -108,11 +127,13 @@ export const SettingsScreen: React.FC = () => {
             { color: isDarkMode ? '#F8FAFC' : '#111827' },
           ]}
         >
-          Ajustes
+          {SECTION_TITLE[section]}
         </Text>
 
         <View style={{ width: 40 }} />
       </View>
+
+      <Text style={[styles.headerSubtitle, { color: isDarkMode ? '#94A3B8' : '#6B7280' }]}>{SECTION_SUBTITLE[section]}</Text>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -120,7 +141,7 @@ export const SettingsScreen: React.FC = () => {
       >
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: isDarkMode ? '#94A3B8' : '#9CA3AF' }]}>
-            APARENCIA
+            APARÊNCIA
           </Text>
           <View
             style={[
@@ -221,7 +242,7 @@ export const SettingsScreen: React.FC = () => {
                       { color: isDarkMode ? '#94A3B8' : '#6B7280' },
                     ]}
                   >
-                    Linguagem do aplicativo
+                    Português (Brasil)
                   </Text>
                 </View>
               </View>
@@ -252,7 +273,7 @@ export const SettingsScreen: React.FC = () => {
                       { color: isDarkMode ? '#F8FAFC' : '#111827' },
                     ]}
                   >
-                    Notificacoes
+                    Notificações
                   </Text>
                   <Text
                     style={[
@@ -303,7 +324,7 @@ export const SettingsScreen: React.FC = () => {
                       { color: isDarkMode ? '#94A3B8' : '#6B7280' },
                     ]}
                   >
-                    Controles de seguranca
+                    Controles de segurança
                   </Text>
                 </View>
               </View>
@@ -315,7 +336,7 @@ export const SettingsScreen: React.FC = () => {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: isDarkMode ? '#94A3B8' : '#9CA3AF' }]}>
-            INFORMACOES
+            INFORMAÇÕES
           </Text>
           <View
             style={[
@@ -347,7 +368,7 @@ export const SettingsScreen: React.FC = () => {
                       { color: isDarkMode ? '#F8FAFC' : '#111827' },
                     ]}
                   >
-                    Versao v1.4.2
+                    Versão v1.4.2
                   </Text>
                   <Text
                     style={[
@@ -386,6 +407,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
+  },
+  headerSubtitle: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    marginTop: -8,
+    fontSize: 13,
+    fontWeight: '600',
   },
   scrollContent: {
     paddingHorizontal: 20,

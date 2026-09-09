@@ -16,7 +16,7 @@ import { Account } from '../types';
 const COLLECTION_NAME = 'accounts';
 
 export const accountService = {
-  subscribeToAccounts: (callback: (accounts: Account[]) => void) => {
+  subscribeToAccounts: (callback: (accounts: Account[]) => void, onError?: (error: Error) => void) => {
     if (!auth.currentUser) return () => {};
 
     const q = query(
@@ -33,7 +33,9 @@ export const accountService = {
       accounts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       callback(accounts);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
+      const message = error instanceof Error ? error.message : 'Não foi possível carregar as contas.';
+      console.error('Accounts listener error [Mobile]:', message);
+      onError?.(new Error(message));
     });
   },
 

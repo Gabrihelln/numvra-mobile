@@ -37,10 +37,12 @@ const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
   navigation,
   colors,
   isDarkMode,
+  width,
   bottomInset,
   openAddTransaction,
 }) => {
-  const tabBarBottom = Math.max(bottomInset, 0);
+  const tabBarBottom = Math.max(bottomInset + 16, 20);
+  const horizontalMargin = width < 380 ? 14 : 20;
   const tabBarBackground = isDarkMode ? colors.card : '#FFFFFF';
 
   const renderIcon = (routeName: string, focused: boolean) => {
@@ -66,12 +68,12 @@ const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
       style={[
         styles.floatingTabBar,
         {
-          left: 0,
-          right: 0,
+          left: horizontalMargin,
+          right: horizontalMargin,
           bottom: tabBarBottom,
           backgroundColor: tabBarBackground,
           borderColor: isDarkMode ? colors.border : '#EEF1F8',
-          height: 78,
+          height: 70,
         },
       ]}
     >
@@ -164,21 +166,18 @@ const styles = StyleSheet.create({
   },
   floatingTabBar: {
     position: 'absolute',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderRadius: 28,
     borderWidth: 1,
-    borderBottomWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingVertical: 8,
     elevation: 12,
     shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   tabButton: {
     flex: 1,
@@ -202,7 +201,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   addFloatingButton: {
     width: 56,

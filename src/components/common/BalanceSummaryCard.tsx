@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ArrowDown, ArrowUp, ChevronDown, Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Rect } from 'react-native-svg';
+import { AnimatedCurrency } from './AnimatedCurrency';
 
 interface BalanceSummaryCardProps {
   period: string;
@@ -11,15 +12,12 @@ interface BalanceSummaryCardProps {
   isBalanceVisible: boolean;
   isDarkMode: boolean;
   onToggleBalance: () => void;
+  shouldAnimateAmounts?: boolean;
 }
 
-const money = (value: number) =>
-  value.toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+const MASKED_AMOUNT = '\u2022\u2022\u2022\u2022\u2022\u2022';
 
-const HiddenAmount = () => <Text style={styles.hiddenAmount}>••••••</Text>;
+const HiddenAmount = () => <Text style={styles.hiddenAmount}>{MASKED_AMOUNT}</Text>;
 
 const DecorativeBars = () => (
   <View style={styles.bars} pointerEvents="none">
@@ -48,6 +46,7 @@ export const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
   isBalanceVisible,
   isDarkMode,
   onToggleBalance,
+  shouldAnimateAmounts = false,
 }) => (
   <View style={styles.wrapper}>
     <View style={styles.card}>
@@ -67,9 +66,16 @@ export const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
 
         <View style={styles.amountRow}>
           <Text style={styles.currency}>R$</Text>
-          <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
-            {isBalanceVisible ? money(balance) : '••••••'}
-          </Text>
+          <AnimatedCurrency
+            value={balance}
+            shouldAnimate={shouldAnimateAmounts}
+            isVisible={isBalanceVisible}
+            delay={200}
+            style={styles.amount}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+          />
         </View>
       </View>
 
@@ -84,6 +90,7 @@ export const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
           valueColor="#0FBF64"
           isDarkMode={isDarkMode}
           isBalanceVisible={isBalanceVisible}
+          shouldAnimateAmount={shouldAnimateAmounts}
         />
         <View style={[styles.divider, { backgroundColor: isDarkMode ? '#3F3F4A' : '#E5E8F0' }]} />
         <Item
@@ -94,6 +101,7 @@ export const BalanceSummaryCard: React.FC<BalanceSummaryCardProps> = ({
           valueColor="#E11919"
           isDarkMode={isDarkMode}
           isBalanceVisible={isBalanceVisible}
+          shouldAnimateAmount={shouldAnimateAmounts}
         />
       </View>
     </View>
@@ -108,15 +116,23 @@ const Item: React.FC<{
   valueColor: string;
   isDarkMode: boolean;
   isBalanceVisible: boolean;
-}> = ({ label, value, icon, iconStyle, valueColor, isDarkMode, isBalanceVisible }) => (
+  shouldAnimateAmount: boolean;
+}> = ({ label, value, icon, iconStyle, valueColor, isDarkMode, isBalanceVisible, shouldAnimateAmount }) => (
   <View style={styles.item}>
     <View style={[styles.statIconBox, iconStyle]}>{icon}</View>
     <View style={styles.itemText}>
       <Text style={[styles.label, { color: isDarkMode ? '#D4D4D8' : '#707A99' }]} numberOfLines={1}>{label}</Text>
       {isBalanceVisible ? (
-        <Text style={[styles.value, { color: valueColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
-          R$ {money(value)}
-        </Text>
+        <AnimatedCurrency
+          value={value}
+          shouldAnimate={shouldAnimateAmount}
+          prefix="R$ "
+          delay={230}
+          style={[styles.value, { color: valueColor }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.68}
+        />
       ) : (
         <HiddenAmount />
       )}

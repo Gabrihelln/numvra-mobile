@@ -32,7 +32,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface FAQItem {
   id: string;
-  category: 'card' | 'pix' | 'security' | 'loans';
+  category: 'transactions' | 'plans' | 'notifications' | 'accounts';
   question: string;
   answer: string;
 }
@@ -109,38 +109,33 @@ export const HelpScreen: React.FC = () => {
   const faqs: FAQItem[] = [
     {
       id: '1',
-      category: 'card',
-      question: 'Como contestar uma compra?',
-      answer:
-        "Para contestar uma compra no seu cartão de crédito, acesse o seu extrato de movimentações, selecione a compra contestada e clique em 'Contestar Transação'. Faremos uma análise detalhada em até 3 dias úteis.",
+      category: 'transactions',
+      question: 'Como editar uma movimentação?',
+      answer: 'Abra o extrato, selecione a movimentação desejada e use a ação de edição para ajustar valor, categoria, data ou descrição.',
     },
     {
       id: '2',
-      category: 'security',
-      question: 'Esqueci minha senha de 4 dígitos',
-      answer:
-        "Para recuperar sua senha de autorização de 4 dígitos, acesse seu Perfil, toque em 'Meus Dados' e valide sua identidade via e-mail. Caso precise, fale diretamente com o suporte.",
+      category: 'accounts',
+      question: 'Como gerenciar minhas contas?',
+      answer: 'Acesse Perfil > Minhas contas para ver contas cadastradas, adicionar novas, editar informações ou desativar uma conta manual.',
     },
     {
       id: '3',
-      category: 'card',
-      question: 'Meu cartão não chegou',
-      answer:
-        'O prazo estimado para a entrega do seu cartão físico é de até 10 dias úteis a contar da aprovação da conta. Você pode consultar o rastreamento em tempo real com o suporte.',
+      category: 'plans',
+      question: 'Como faço upgrade de plano?',
+      answer: 'Acesse Meu plano, escolha Pro ou Premium e conclua o checkout seguro pelo Stripe. A atualização aparece no app após a confirmação da assinatura.',
     },
     {
       id: '4',
-      category: 'pix',
-      question: 'Qual o limite máximo do Pix?',
-      answer:
-        'Seus limites do Pix são configurados por segurança para o dia e noite. Você pode solicitar um aumento do limite diário, que é processado em até 24h para sua segurança.',
+      category: 'notifications',
+      question: 'Por que não recebo notificações?',
+      answer: 'Confira se as notificações estão ativadas nos ajustes do Numvra e se o sistema do dispositivo permitiu alertas para o aplicativo.',
     },
     {
       id: '5',
-      category: 'loans',
-      question: 'Como funciona a taxa de empréstimo?',
-      answer:
-        'As taxas de juros dependem do seu perfil de crédito individual e do prazo escolhido. Simulando pelo aplicativo, você verá o CET detalhado antes de realizar qualquer contratação.',
+      category: 'plans',
+      question: 'Como cancelar uma assinatura paga?',
+      answer: 'Use Meu plano > Gerenciar assinatura para abrir o portal seguro do Stripe, quando houver assinatura paga ativa vinculada à sua conta.',
     },
   ];
 
@@ -183,7 +178,7 @@ export const HelpScreen: React.FC = () => {
             { color: isDarkMode ? '#F8FAFC' : '#111827' },
           ]}
         >
-          Ajuda e Termos de Uso
+          Ajuda e privacidade
         </Text>
 
         <TouchableOpacity

@@ -1,3 +1,4 @@
+﻿import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PermissionsAndroid, Platform } from 'react-native';
 import {
   AuthorizationStatus,
@@ -17,7 +18,7 @@ import {
   collection,
   doc,
   getDoc,
-  onSnapshot,
+    onSnapshot,
   serverTimestamp,
   setDoc,
   type Unsubscribe,
@@ -47,7 +48,7 @@ const PUSH_SETTINGS_COLLECTION = 'settings';
 const PUSH_SETTINGS_DOC = 'push_notifications';
 const PUSH_TOKENS_COLLECTION = 'push_tokens';
 const SYSTEM_NOTIFICATIONS_COLLECTION = 'system_notifications';
-
+const NOTIFICATION_READS_COLLECTION = 'notification_reads';
 const messagingInstance = getMessaging();
 
 const isAuthorized = (status: number) =>
@@ -67,6 +68,31 @@ const getPushSettingsRef = (userId: string) =>
 
 const getPushTokenRef = (userId: string, token: string) =>
   doc(db, 'users', userId, PUSH_TOKENS_COLLECTION, tokenToDocId(token));
+
+
+const getNotificationReadRef = (userId: string, notificationId: string) =>
+  doc(db, 'users', userId, NOTIFICATION_READS_COLLECTION, notificationId);
+
+const getNotificationReadsCollection = (userId: string) =>
+  collection(db, 'users', userId, NOTIFICATION_READS_COLLECTION);
+const getLocalReadsKey = (userId: string) => `@numvra:notification_reads:${userId}`;
+
+const readLocalNotificationReads = async (userId: string) => {
+  const raw = await AsyncStorage.getItem(getLocalReadsKey(userId));
+  if (!raw) return new Set<string>();
+  try {
+    const ids = JSON.parse(raw);
+    return new Set<string>(Array.isArray(ids) ? ids : []);
+  } catch {
+    return new Set<string>();
+  }
+};
+
+const saveLocalNotificationRead = async (userId: string, notificationId: string) => {
+  const ids = await readLocalNotificationReads(userId);
+  ids.add(notificationId);
+  await AsyncStorage.setItem(getLocalReadsKey(userId), JSON.stringify(Array.from(ids)));
+};
 
 const getNotificationTimestamp = (notification: SystemNotification) => {
   const value = notification.createdAt;
@@ -247,6 +273,34 @@ export const pushNotificationService = {
     return getInitialNotification(messagingInstance);
   },
 
+  listenToNotificationReads(
+    userId: string,
+    callback: (readIds: Set<string>) => void,
+    onError?: (error: Error) => void
+  ): Unsubscribe {
+    return onSnapshot(getNotificationReadsCollection(userId), (snapshot) => {
+      callback(new Set(snapshot.docs.map((docSnap) => docSnap.id)));
+    }, async (error) => {
+      callback(await readLocalNotificationReads(userId));
+      onError?.(error instanceof Error ? error : new Error('Não foi possível carregar leituras remotas de notificações.'));
+    });
+  },
+
+  async markNotificationRead(userId: string, notificationId: string) {
+    await saveLocalNotificationRead(userId, notificationId);
+    try {
+      await setDoc(getNotificationReadRef(userId, notificationId), {
+        read: true,
+        readAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      console.warn('Notification read saved locally because Firestore write failed.');
+    }
+  },
+
+  async markAllNotificationsRead(userId: string, notifications: SystemNotification[]) {
+    await Promise.all(notifications.map((notification) => this.markNotificationRead(userId, notification.id)));
+  },
   listenToSystemNotifications(
     userId: string,
     callback: (notifications: SystemNotification[]) => void,
@@ -277,3 +331,6 @@ export const pushNotificationService = {
     });
   },
 };
+
+
+

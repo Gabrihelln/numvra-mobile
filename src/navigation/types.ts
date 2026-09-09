@@ -1,4 +1,4 @@
-import { NavigatorScreenParams } from '@react-navigation/native';
+﻿import { NavigatorScreenParams } from '@react-navigation/native';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -8,20 +8,18 @@ export type RootStackParamList = {
   TransactionDetail: { transactionId: string };
   Budget: undefined;
   Plan: undefined;
-  Settings: undefined;
+  Settings: { section?: 'appearance' | 'notifications' | 'language' | 'security' } | undefined;
   Help: undefined;
-  AddAccount: undefined;
+  Accounts: undefined;
+  AddAccount: { accountId?: string } | undefined;
   Categories: undefined;
   CategoryLimits: undefined;
   Subscriptions: undefined;
   Goals: undefined;
   AddTransactionModal: { transaction?: import('../types').Transaction } | undefined;
-  AddCardModal: undefined;
-  AddGoalModal: undefined;
+AddGoalModal: undefined;
   AddSubscriptionModal: undefined;
-  AddBudgetCategoryModal: undefined;
-  NotificationsModal: undefined;
-  UpgradeModal: { featureName?: string };
+UpgradeModal: { featureName?: string };
 };
 
 export type AuthStackParamList = {
@@ -38,3 +36,4 @@ export type MainTabParamList = {
   Cards: undefined;
   Profile: undefined;
 };
+

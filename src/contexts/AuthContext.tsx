@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+﻿import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, query, collection, where } from 'firebase/firestore';
 import { Alert } from 'react-native';
 import { auth, db } from '../config/firebase';
 import { authService } from '../services/authService';
-import { UserProfile, PlanTier } from '../types';
+import { UserProfile } from '../types';
+import { getPlanRule, normalizePlanId, PlanId } from '../config/planCatalog';
 
 export interface PlanLimitCheck {
   allowed: boolean;
@@ -16,7 +17,7 @@ export interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
-  activePlan: 'basic' | 'pro' | 'premium';
+  activePlan: PlanId;
   isPlanExpired: boolean;
   subscriptionsCount: number;
   goalsCount: number;
@@ -31,7 +32,10 @@ export interface AuthContextType {
   triggerUpgrade?: (feature: string, reason: string) => void;
   closeUpgradeModal?: () => void;
   upgradeModalState?: { isOpen: boolean; feature: string; reason: string } | null;
+  homeIntroPlayed: boolean;
+  markHomeIntroPlayed: () => void;
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -43,24 +47,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [goalsCount, setGoalsCount] = useState<number>(0);
   const [cardsCount, setCardsCount] = useState<number>(0);
   const [upgradeModalState, setUpgradeModalState] = useState<{ isOpen: boolean; feature: string; reason: string } | null>(null);
+  const [homeIntroPlayed, setHomeIntroPlayed] = useState(false);
+  const lastAuthUserIdRef = useRef<string | null>(null);
 
   // Derive active plan taking expiration into account
-  const activePlan: 'basic' | 'pro' | 'premium' = (() => {
+  const activePlan: PlanId = (() => {
     if (!profile) return 'basic';
-    const plan = (profile.plan || 'basic') as PlanTier;
-    if (plan === 'basic' || plan === 'free') return 'basic';
+    const plan = normalizePlanId(profile.plan);
 
-    if (profile.planActiveUntil) {
+    if (plan !== 'basic' && profile.planActiveUntil) {
       try {
         const activeUntil = new Date(profile.planActiveUntil);
-        if (activeUntil.getTime() < Date.now()) {
-          return 'basic';
-        }
+        if (activeUntil.getTime() < Date.now()) return 'basic';
       } catch (err) {
         console.warn('Error parsing planActiveUntil timestamp:', err);
       }
     }
-    return (plan === 'premium' ? 'premium' : plan === 'pro' ? 'pro' : 'basic');
+
+    return plan;
   })();
 
   const isPlanExpired = !!(
@@ -70,88 +74,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const checkLimit = (type: 'subscription' | 'goal' | 'budget' | 'upcomingBills' | 'card' | 'alert' | 'notification'): PlanLimitCheck => {
-    const plan = activePlan;
+    const plan = getPlanRule(activePlan);
+    const limits = plan.limits;
 
     if (type === 'subscription') {
-      if (plan === 'basic') {
-        return {
-          allowed: subscriptionsCount < 3,
-          limitValue: 3,
-          reason: 'Seu plano Basic permite até 3 assinaturas ou contas ativas. Faça upgrade para o Pro para até 5 ou para o Premium para ilimitado.'
-        };
-      }
-      if (plan === 'pro') {
-        return {
-          allowed: subscriptionsCount < 5,
-          limitValue: 5,
-          reason: 'Seu plano Pro permite até 5 assinaturas ou contas ativas. Faça upgrade para o Premium para ter assinaturas ilimitadas.'
-        };
-      }
-      return { allowed: true, limitValue: Infinity, reason: '' };
+      const limit = limits.subscriptions;
+      if (limit === Infinity) return { allowed: true, limitValue: Infinity, reason: '' };
+      return {
+        allowed: subscriptionsCount < limit,
+        limitValue: limit,
+        reason: `Seu plano ${plan.displayName} permite até ${limit} assinaturas ou contas ativas. Faça upgrade para ampliar seus limites.`,
+      };
     }
 
     if (type === 'goal') {
-      if (plan === 'basic') {
-        return {
-          allowed: goalsCount < 1,
-          limitValue: 1,
-          reason: 'Seu plano Basic permite 1 meta de poupança. Faça upgrade para o Pro ou Premium para criar metas ilimitadas.'
-        };
-      }
-      return { allowed: true, limitValue: Infinity, reason: '' };
+      const limit = limits.goals;
+      if (limit === Infinity) return { allowed: true, limitValue: Infinity, reason: '' };
+      return {
+        allowed: goalsCount < limit,
+        limitValue: limit,
+        reason: `Seu plano ${plan.displayName} permite ${limit} meta financeira. Faça upgrade para criar metas ilimitadas.`,
+      };
     }
 
     if (type === 'budget') {
-      if (plan !== 'premium') {
-        return {
-          allowed: false,
-          limitValue: false,
-          reason: 'Budgets por categoria são exclusivos do plano Premium.'
-        };
-      }
-      return { allowed: true, limitValue: true, reason: '' };
+      return limits.budgets
+        ? { allowed: true, limitValue: true, reason: '' }
+        : { allowed: false, limitValue: false, reason: 'Limites por categoria estão disponíveis nos planos Pro e Premium.' };
     }
 
-    if (type === 'upcomingBills') {
-      if (plan === 'basic') {
-        return {
-          allowed: false,
-          limitValue: false,
-          reason: 'Alertas de vencimento estão disponíveis nos planos Pro e Premium.'
-        };
-      }
-      return { allowed: true, limitValue: true, reason: '' };
+    if (type === 'upcomingBills' || type === 'alert') {
+      return limits.alerts
+        ? { allowed: true, limitValue: true, reason: '' }
+        : { allowed: false, limitValue: false, reason: 'Alertas de vencimento estão disponíveis nos planos Pro e Premium.' };
     }
 
     if (type === 'card') {
-      if (plan !== 'premium') {
-        return {
-          allowed: false,
-          limitValue: false,
-          reason: 'Cartões de crédito são exclusivos do plano Premium.'
-        };
-      }
-      return { allowed: true, limitValue: true, reason: '' };
-    }
-
-    if (type === 'alert') {
-      if (plan === 'basic') {
-        return {
-          allowed: false,
-          limitValue: false,
-          reason: 'Alertas de vencimento estão disponíveis nos planos Pro e Premium.'
-        };
-      }
-      return { allowed: true, limitValue: true, reason: '' };
+      return limits.cards
+        ? { allowed: true, limitValue: true, reason: '' }
+        : { allowed: false, limitValue: false, reason: 'Cartões estão disponíveis nos planos do Numvra.' };
     }
 
     if (type === 'notification') {
-      return { allowed: true, limitValue: true, reason: '' };
+      return limits.notifications
+        ? { allowed: true, limitValue: true, reason: '' }
+        : { allowed: false, limitValue: false, reason: 'Notificações não estão disponíveis no seu plano.' };
     }
 
     return { allowed: true, limitValue: true, reason: '' };
   };
-
   const triggerUpgrade = (feature: string, reason: string) => {
     setUpgradeModalState({ isOpen: true, feature, reason });
     Alert.alert('Recurso indisponível no seu plano', reason);
@@ -160,6 +131,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const closeUpgradeModal = () => {
     setUpgradeModalState(null);
   };
+
+  const markHomeIntroPlayed = useCallback(() => {
+    setHomeIntroPlayed(true);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     await authService.signInWithEmail(email, password);
@@ -178,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    setHomeIntroPlayed(false);
     await authService.signOutUser();
     setUser(null);
     setProfile(null);
@@ -194,6 +170,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let unsubscribeCards: (() => void) | undefined;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (authUser) => {
+      const nextUserId = authUser?.uid || null;
+      if (lastAuthUserIdRef.current !== nextUserId) {
+        setHomeIntroPlayed(false);
+        lastAuthUserIdRef.current = nextUserId;
+      }
+
       setUser(authUser);
       // Navigation is derived from Firebase Auth. Profile data is loaded in
       // parallel and must not delay the transition after a successful sign-in.
@@ -307,6 +289,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         triggerUpgrade,
         closeUpgradeModal,
         upgradeModalState,
+        homeIntroPlayed,
+        markHomeIntroPlayed,
       }}
     >
       {children}
@@ -321,3 +305,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

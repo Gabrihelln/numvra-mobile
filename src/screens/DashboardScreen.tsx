@@ -27,6 +27,8 @@ import { NotificationsModal } from '../components/modals/NotificationsModal';
 import { pushNotificationService, type SystemNotification } from '../services/pushNotificationService';
 import { TransactionIcon } from '../components/common/TransactionIcon';
 import { BalanceSummaryCard } from '../components/common/BalanceSummaryCard';
+import { IntroAnimatedView } from '../components/common/IntroAnimatedView';
+import { AnimatedProgressFill } from '../components/common/AnimatedProgressFill';
 import { formatBrazilianDate, toApiDate } from '../utils/dateFormat';
 import {
   AlertCircle,
@@ -159,7 +161,7 @@ export const DashboardScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const { isDarkMode } = useTheme();
-  const { user, profile, checkLimit, triggerUpgrade } = useAuth();
+  const { user, profile, checkLimit, triggerUpgrade, homeIntroPlayed, markHomeIntroPlayed } = useAuth();
 
   const [showBalance, setShowBalance] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -171,6 +173,12 @@ export const DashboardScreen: React.FC = () => {
   const [notificationBadgeCount, setNotificationBadgeCount] = useState(0);
   const [selectedCardForPayment, setSelectedCardForPayment] = useState<CreditCardType | null>(null);
   const [isPayCardModalOpen, setIsPayCardModalOpen] = useState(false);
+  const [hasTransactionsSnapshot, setHasTransactionsSnapshot] = useState(false);
+  const [hasSubscriptionsSnapshot, setHasSubscriptionsSnapshot] = useState(false);
+  const [hasGoalsSnapshot, setHasGoalsSnapshot] = useState(false);
+  const [hasCardsSnapshot, setHasCardsSnapshot] = useState(false);
+  const [playHomeIntro, setPlayHomeIntro] = useState(false);
+  const [homeIntroFallbackReady, setHomeIntroFallbackReady] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -227,11 +235,28 @@ export const DashboardScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    setHasTransactionsSnapshot(false);
+    setHasSubscriptionsSnapshot(false);
+    setHasGoalsSnapshot(false);
+    setHasCardsSnapshot(false);
+
     if (user) {
-      const unsubTransactions = transactionService.subscribeToTransactions(setTransactions);
-      const unsubSubscriptions = subscriptionService.subscribeToSubscriptions(setSubscriptions);
-      const unsubGoals = goalService.subscribeToGoals(setGoals);
-      const unsubCards = cardService.subscribeToCards(setCards);
+      const unsubTransactions = transactionService.subscribeToTransactions((items) => {
+        setTransactions(items);
+        setHasTransactionsSnapshot(true);
+      });
+      const unsubSubscriptions = subscriptionService.subscribeToSubscriptions((items) => {
+        setSubscriptions(items);
+        setHasSubscriptionsSnapshot(true);
+      });
+      const unsubGoals = goalService.subscribeToGoals((items) => {
+        setGoals(items);
+        setHasGoalsSnapshot(true);
+      });
+      const unsubCards = cardService.subscribeToCards((items) => {
+        setCards(items);
+        setHasCardsSnapshot(true);
+      });
       return () => {
         unsubTransactions();
         unsubSubscriptions();
@@ -239,6 +264,11 @@ export const DashboardScreen: React.FC = () => {
         unsubCards();
       };
     }
+
+    setTransactions([]);
+    setSubscriptions([]);
+    setGoals([]);
+    setCards([]);
   }, [user]);
 
   // Receitas
@@ -399,6 +429,33 @@ export const DashboardScreen: React.FC = () => {
     }
   };
 
+  const isDashboardDataReady = hasTransactionsSnapshot && hasSubscriptionsSnapshot && hasGoalsSnapshot && hasCardsSnapshot;
+  const canStartHomeIntro = isDashboardDataReady || homeIntroFallbackReady;
+
+  useEffect(() => {
+    if (!canStartHomeIntro || homeIntroPlayed || playHomeIntro) return;
+
+    setPlayHomeIntro(true);
+    markHomeIntroPlayed();
+  }, [canStartHomeIntro, homeIntroPlayed, markHomeIntroPlayed, playHomeIntro]);
+
+  useEffect(() => {
+    if (homeIntroPlayed) return undefined;
+    setHomeIntroFallbackReady(false);
+    const timer = setTimeout(() => setHomeIntroFallbackReady(true), 1800);
+    return () => clearTimeout(timer);
+  }, [homeIntroPlayed, user?.uid]);
+
+  useEffect(() => {
+    if (!playHomeIntro) return undefined;
+
+    const timeout = setTimeout(() => {
+      setPlayHomeIntro(false);
+    }, 1500);
+
+    return () => clearTimeout(timeout);
+  }, [playHomeIntro]);
+
   const monthYearLabel = new Date().toLocaleString('pt-BR', {
     month: 'long',
     year: 'numeric',
@@ -417,6 +474,7 @@ export const DashboardScreen: React.FC = () => {
     .slice(0, 3);
   const visibleGoals = goals.slice(0, 2);
   const goalCardWidth = Math.max(150, Math.floor((screenWidth - 56) / 2));
+  const shouldHoldHomeIntro = !homeIntroPlayed && !playHomeIntro;
 
   const openUpcomingBills = () => {
     if (!alertAccess.allowed) {
@@ -436,6 +494,7 @@ export const DashboardScreen: React.FC = () => {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 60 }]}
           showsVerticalScrollIndicator={false}
         >
+          <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} duration={320} translateY={-8}>
           <View style={styles.header}>
             <View style={styles.headerCopy}>
               <Text style={[styles.homeTitle, { color: isDarkMode ? '#F8FAFC' : '#0A102B' }]} numberOfLines={1} adjustsFontSizeToFit>
@@ -472,7 +531,9 @@ export const DashboardScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
+          </IntroAnimatedView>
 
+          <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={100} duration={430} translateY={15} scaleFrom={0.96}>
           <BalanceSummaryCard
             period={monthYearLabel}
             balance={balance}
@@ -481,28 +542,39 @@ export const DashboardScreen: React.FC = () => {
             isBalanceVisible={showBalance}
             isDarkMode={isDarkMode}
             onToggleBalance={() => setShowBalance((visible) => !visible)}
+            shouldAnimateAmounts={playHomeIntro}
           />
+          </IntroAnimatedView>
 
           <View style={styles.quickActionsRow}>
+            <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={300} duration={360} translateY={12} style={styles.quickActionAnimatedSlot}>
             <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={() => navigation.navigate('AddTransactionModal')} activeOpacity={0.86}>
               <View style={styles.quickActionIconCircle}><Plus size={25} color="#FFFFFF" strokeWidth={2.6} /></View>
               <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Adicionar</Text>
             </TouchableOpacity>
+            </IntroAnimatedView>
+            <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={350} duration={360} translateY={12} style={styles.quickActionAnimatedSlot}>
             <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={() => navigation.navigate('MainTabs', { screen: 'Statement' })} activeOpacity={0.86}>
               <Repeat2 size={28} color="#5748FF" strokeWidth={2.4} />
               <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Transferir</Text>
             </TouchableOpacity>
+            </IntroAnimatedView>
+            <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={400} duration={360} translateY={12} style={styles.quickActionAnimatedSlot}>
             <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={openUpcomingBills} activeOpacity={0.86}>
               <CreditCard size={27} color="#5748FF" strokeWidth={2.2} />
               <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Pagar</Text>
             </TouchableOpacity>
+            </IntroAnimatedView>
+            <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={450} duration={360} translateY={12} style={styles.quickActionAnimatedSlot}>
             <TouchableOpacity style={[styles.quickActionCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#F7F7FF' }]} onPress={() => navigation.navigate('MainTabs', { screen: 'Profile' })} activeOpacity={0.86}>
               <MoreHorizontal size={30} color="#5748FF" strokeWidth={2.6} />
               <Text style={[styles.quickActionLabel, { color: isDarkMode ? '#D4D4D8' : '#687292' }]}>Mais</Text>
             </TouchableOpacity>
+            </IntroAnimatedView>
           </View>
 
           {totalUpcomingCount > 0 && (
+            <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={500} duration={380} translateY={12}>
             <TouchableOpacity style={styles.upcomingBillsCard} onPress={openUpcomingBills} activeOpacity={0.9}>
               <View style={styles.warningOuter}><View style={styles.warningAlertBadge}><AlertCircle size={26} color="#E11919" fill="#E11919" strokeWidth={2.6} /></View></View>
               <View style={styles.upcomingBillsContent}>
@@ -516,8 +588,10 @@ export const DashboardScreen: React.FC = () => {
               </View>
               <ChevronRight size={28} color={isDarkMode ? '#E5E7EB' : '#0A102B'} strokeWidth={2.6} />
             </TouchableOpacity>
+            </IntroAnimatedView>
           )}
 
+          <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={540} duration={400} translateY={12}>
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionTitleText, { color: isDarkMode ? '#F4F4F5' : '#0A102B' }]}>{'\u00DAltimas transa\u00E7\u00F5es'}</Text>
@@ -550,12 +624,14 @@ export const DashboardScreen: React.FC = () => {
 
               {latestTransactions.length === 0 && (
                 <View style={styles.emptyCard}>
-                  <Text style={styles.emptyCardText}>Nenhuma transação encontrada</Text>
+                  <Text style={styles.emptyCardText}>{'Nenhuma transa\u00E7\u00E3o encontrada'}</Text>
                 </View>
               )}
             </View>
           </View>
+          </IntroAnimatedView>
 
+          <IntroAnimatedView play={playHomeIntro} holdInitialState={shouldHoldHomeIntro} delay={620} duration={400} translateY={12}>
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionTitleText, { color: isDarkMode ? '#F4F4F5' : '#0A102B' }]}>Metas</Text>
@@ -587,7 +663,7 @@ export const DashboardScreen: React.FC = () => {
                       </Text>
                       <Text style={styles.goalProgressText}>{Math.round(progressPct)}% completo</Text>
                       <View style={styles.goalProgressBarBg}>
-                        <View style={[styles.goalProgressBarFill, { width: `${progressPct}%` }]} />
+                        <AnimatedProgressFill progress={progressPct} shouldAnimate={playHomeIntro} style={styles.goalProgressBarFill} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -601,6 +677,7 @@ export const DashboardScreen: React.FC = () => {
               )}
             </View>
           </View>
+          </IntroAnimatedView>
         </ScrollView>
       </SafeAreaView>
 
@@ -708,6 +785,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 22,
     marginBottom: 16,
+  },
+  quickActionAnimatedSlot: {
+    flex: 1,
   },
   quickActionCard: {
     flex: 1,

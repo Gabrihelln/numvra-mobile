@@ -70,6 +70,10 @@ export const api = {
     }
   },
 
+  get<T>(path: string, authenticated = true) {
+    return this.request<T>(path, { method: 'GET' }, authenticated);
+  },
+
   post<T>(path: string, body: unknown, authenticated = true) {
     return this.request<T>(
       path,

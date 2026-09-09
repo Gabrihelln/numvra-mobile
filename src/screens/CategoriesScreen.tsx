@@ -22,6 +22,8 @@ import {
 } from 'lucide-react-native';
 import { RootStackParamList } from '../navigation/types';
 import { useCategories } from '../contexts/CategoryContext';
+import { AddBudgetCategoryModal } from '../components/modals/AddBudgetCategoryModal';
+import { budgetService } from '../services/budgetService';
 import { useTransactions } from '../hooks/useTransactions';
 import { getCategoryVisual } from '../constants/iconRegistry';
 import { EXPENSE_CATEGORIES, getSharedCategoryByName, normalizeCategoryName } from '../constants/categories';
@@ -113,6 +115,7 @@ export const CategoriesScreen: React.FC = () => {
   const { categories } = useCategories();
   const [tab, setTab] = useState<CategoryTab>('Todas');
   const [search, setSearch] = useState('');
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
 
   const filteredCategories = useMemo(() => {
     const query = normalizeCategoryName(search);
@@ -132,6 +135,21 @@ export const CategoriesScreen: React.FC = () => {
   }, [categories, search, tab]);
 
   const expenseCount = categories.filter((category) => (category.type || getSharedCategoryByName(category.name)?.type) === 'expense').length;
+  const totalAllocated = categories.reduce((sum, category) => sum + (category.percentage || 0), 0);
+
+  const handleCreateCategory = async (name: string, percentage: number, icon: string) => {
+    await budgetService.addBudgetCategory({
+      name,
+      percentage,
+      icon,
+      type: 'expense',
+      color: '#5748FF',
+      backgroundColor: '#F1EEFF',
+      active: true,
+      isActive: true,
+      enabled: true,
+    });
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -174,11 +192,17 @@ export const CategoriesScreen: React.FC = () => {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('AddBudgetCategoryModal')} activeOpacity={0.88}>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => setIsAddCategoryOpen(true)} activeOpacity={0.88}>
           <Plus size={24} color="#FFFFFF" strokeWidth={2.5} />
           <Text style={styles.primaryButtonText}>Nova categoria</Text>
         </TouchableOpacity>
       </ScrollView>
+      <AddBudgetCategoryModal
+        isOpen={isAddCategoryOpen}
+        onClose={() => setIsAddCategoryOpen(false)}
+        onSubmit={handleCreateCategory}
+        totalAllocated={totalAllocated}
+      />
     </SafeAreaView>
   );
 };

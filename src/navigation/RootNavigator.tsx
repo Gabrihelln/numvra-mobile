@@ -16,6 +16,7 @@ import { HelpScreen } from '../screens/HelpScreen';
 import { PlaceholderScreen } from '../screens/PlaceholderScreen';
 import { AddGoalScreen } from '../screens/AddGoalScreen';
 import { AddAccountScreen } from '../screens/AddAccountScreen';
+import { AccountsScreen } from '../screens/AccountsScreen';
 import { CategoriesScreen, CategoryLimitsScreen } from '../screens/CategoriesScreen';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -72,6 +73,7 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen name="Plan" component={PlanScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Accounts" component={AccountsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="AddAccount" component={AddAccountScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Categories" component={CategoriesScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CategoryLimits" component={CategoryLimitsScreen} options={{ headerShown: false }} />

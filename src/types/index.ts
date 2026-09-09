@@ -1,4 +1,4 @@
-export enum OperationType {
+﻿export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
   DELETE = 'delete',
@@ -229,10 +229,13 @@ export interface UserProfile {
 export interface SubscriptionPlan {
   id: string;
   name: string;
+  displayName?: string;
   description: string;
   monthlyPrice: number;
   semiannualPrice: number;
   annualPrice: number;
   features: string[];
+  limits?: Record<string, unknown>;
   badge?: string;
 }
+

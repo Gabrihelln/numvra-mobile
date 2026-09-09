@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -249,7 +249,7 @@ export const CardsScreen: React.FC = () => {
                   <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${activeCardFinancials.usedPercent}%` }]} /></View>
                   <View style={styles.limitsRow}>
                     <View style={styles.limitBlock}>
-                      <Text style={[styles.limitLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Limite utilizado</Text>
+                      <Text style={[styles.limitLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Utilizado</Text>
                       <Text style={[styles.limitValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.1}>{formatCurrency(activeCardFinancials.usedLimit)}</Text>
                       <View style={styles.limitMetaRow}>
                         <Text style={[styles.limitMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>de {formatCurrency(activeCardFinancials.totalLimit)}</Text>
@@ -258,7 +258,7 @@ export const CardsScreen: React.FC = () => {
                     </View>
                     <View style={styles.verticalDivider} />
                     <View style={styles.limitBlock}>
-                      <Text style={[styles.limitLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Limite disponível</Text>
+                      <Text style={[styles.limitLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Disponível</Text>
                       <Text style={[styles.limitValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.1}>{formatCurrency(activeCardFinancials.availableLimit)}</Text>
                       <View style={styles.limitMetaRow}><View /><Text style={styles.availablePercent}>{Math.round(activeCardFinancials.availablePercent)}%</Text></View>
                     </View>
@@ -270,7 +270,7 @@ export const CardsScreen: React.FC = () => {
                     <View style={styles.dateTextWrap}>
                       <Text style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>Melhor dia de compra</Text>
                       <Text style={[styles.dateValue, { color: colors.text }]}>Dia {bestPurchaseDay}</Text>
-                      <Text style={[styles.dateMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Mais dias para pagar</Text>
+                      {/* <Text style={[styles.dateMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Mais dias para pagar</Text> */}
                     </View>
                   </View>
                   <View style={styles.dateDivider} />
@@ -279,7 +279,7 @@ export const CardsScreen: React.FC = () => {
                     <View style={styles.dateTextWrap}>
                       <Text style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>Dia de vencimento</Text>
                       <Text style={[styles.dateValue, { color: colors.text }]}>Dia {dueDay}</Text>
-                      <Text style={[styles.dateMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Todo mês</Text>
+                      {/* <Text style={[styles.dateMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Todo mês</Text> */}
                     </View>
                   </View>
                 </View>

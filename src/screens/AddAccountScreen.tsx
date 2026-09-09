@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import {
   type DimensionValue,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   Banknote,
   Building2,
@@ -32,7 +32,8 @@ import { BackButton } from '../components/common/BackButton';
 import { ModalBottomSheet } from '../components/common/ModalBottomSheet';
 import { useTheme } from '../contexts/ThemeContext';
 import { accountService } from '../services/accountService';
-import { AccountKind, BankAccountType } from '../types';
+import { Account, AccountKind, BankAccountType } from '../types';
+import { useAccounts } from '../hooks/useAccounts';
 
 const PRIMARY = '#5748FF';
 const TEXT = '#10152F';
@@ -78,10 +79,14 @@ const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u0
 
 export const AddAccountScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const { colors, isDarkMode } = useTheme();
   const { width } = useWindowDimensions();
   const compact = width < 360;
+  const { accounts } = useAccounts();
+  const accountToEdit = accounts.find((account) => account.id === route.params?.accountId);
+  const isEditing = !!accountToEdit;
 
   const [kind, setKind] = useState<AccountKind>('bank');
   const [selectedBankId, setSelectedBankId] = useState('nubank');
@@ -92,6 +97,16 @@ export const AddAccountScreen: React.FC = () => {
   const [accountType, setAccountType] = useState<BankAccountType>('checking');
   const [isTypePickerOpen, setIsTypePickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!accountToEdit) return;
+    setKind(accountToEdit.accountKind || 'bank');
+    setSelectedBankId(accountToEdit.institutionId || 'other');
+    setName(accountToEdit.name || '');
+    setAgency(accountToEdit.agency || '');
+    setAccountNumber(accountToEdit.accountNumber || '');
+    setAccountType(accountToEdit.accountType || 'checking');
+  }, [accountToEdit]);
 
   const selectedBank = banks.find((bank) => bank.id === selectedBankId) || banks[0];
   const selectedAccountType = accountTypes.find((type) => type.key === accountType) || accountTypes[0];
@@ -117,7 +132,19 @@ export const AddAccountScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      await accountService.addAccount({
+      if (isEditing && accountToEdit) {
+        await accountService.updateAccount(accountToEdit.id, {
+          name: trimmedName,
+          accountType,
+          accountKind: kind,
+          institutionId: selectedBank.id,
+          institutionName: selectedBank.name,
+          institutionIcon: selectedBank.mark,
+          agency: agency.trim() || undefined,
+          accountNumber: accountNumber.trim() || undefined,
+        } as Partial<Account>);
+      } else {
+        await accountService.addAccount({
         name: trimmedName,
         accountType,
         accountKind: kind,
@@ -132,10 +159,11 @@ export const AddAccountScreen: React.FC = () => {
         openFinanceStatus: 'not_connected',
         isManual: true,
         isActive: true,
-      });
+        });
+      }
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Erro ao salvar', error?.message || 'Não foi possível adicionar a conta.');
+      Alert.alert('Erro ao salvar', error?.message || (isEditing ? 'Não foi possível atualizar a conta.' : 'Não foi possível adicionar a conta.'));
     } finally {
       setLoading(false);
     }
@@ -154,8 +182,8 @@ export const AddAccountScreen: React.FC = () => {
           <View style={styles.header}>
             <BackButton onPress={() => navigation.goBack()} />
             <View style={styles.headerCopy}>
-              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>Adicionar conta</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Cadastre um novo banco, carteira ou conta para organizar suas finanças no Numvra.</Text>
+              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{isEditing ? 'Editar conta' : 'Adicionar conta'}</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{isEditing ? 'Atualize as informações desta conta.' : 'Cadastre um novo banco, carteira ou conta para organizar suas finanças no Numvra.'}</Text>
             </View>
           </View>
 
@@ -246,7 +274,7 @@ export const AddAccountScreen: React.FC = () => {
           </View>
 
           <TouchableOpacity onPress={save} disabled={loading} style={[styles.submit, loading && styles.submitDisabled]} activeOpacity={0.86}>
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitText}>Adicionar conta</Text>}
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitText}>{isEditing ? 'Salvar alterações' : 'Adicionar conta'}</Text>}
           </TouchableOpacity>
         </ScrollView>
 
