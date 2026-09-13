@@ -1,8 +1,9 @@
 import { 
   collection, 
   addDoc, 
+  setDoc,
+  getDoc,
   updateDoc, 
-  deleteDoc, 
   doc, 
   query, 
   where, 
@@ -11,9 +12,9 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
-import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
+import { handleFirestoreError, OperationType, removeUndefinedFields } from '../lib/firestoreUtils';
 import { BudgetCategory } from '../types';
-import { DEFAULT_BUDGET_CATEGORIES } from '../constants/categories';
+import { DEFAULT_BUDGET_CATEGORIES, getSharedCategoryByName } from '../constants/categories';
 
 const COLLECTION_NAME = 'budgets';
 
@@ -30,13 +31,9 @@ export const budgetService = {
     );
 
     return onSnapshot(q, async (snapshot) => {
-      if (snapshot.empty) {
-        await budgetService.seedDefaultCategories();
-        return;
-      }
       const categories = snapshot.docs.map(d => ({
+        ...d.data(),
         id: d.id,
-        ...d.data()
       })) as BudgetCategory[];
 
       categories.sort((a, b) => {
@@ -67,23 +64,37 @@ export const budgetService = {
     if (!auth.currentUser) throw new Error('Usuário não autenticado');
 
     try {
-      await addDoc(collection(db, COLLECTION_NAME), {
+      await addDoc(collection(db, COLLECTION_NAME), removeUndefinedFields({
         ...category,
         userId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
-      });
+      }));
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, COLLECTION_NAME);
     }
   },
 
   updateBudgetCategory: async (id: string, category: Partial<BudgetCategory>) => {
+    if (!auth.currentUser) throw new Error('Usuário não autenticado');
     try {
+      if (id.startsWith('default-')) {
+        const base = DEFAULT_BUDGET_CATEGORIES.find((item) => item.id === id);
+        if (!base) throw new Error('Categoria não encontrada');
+        const { id: defaultCategoryId, ...data } = base;
+        await setDoc(doc(db, COLLECTION_NAME, `${auth.currentUser.uid}_${id}`), removeUndefinedFields({
+          ...data, ...category, defaultCategoryId, userId: auth.currentUser.uid, updatedAt: serverTimestamp(),
+        }), { merge: true });
+        return;
+      }
       const docRef = doc(db, COLLECTION_NAME, id);
-      await updateDoc(docRef, {
+      const previous = await getDoc(docRef);
+      const previousData = previous.data();
+      const original = getSharedCategoryByName(previousData?.name);
+      await updateDoc(docRef, removeUndefinedFields({
         ...category,
+        defaultCategoryId: previousData?.defaultCategoryId || (original ? 'default-' + original.id : undefined),
         updatedAt: serverTimestamp(),
-      });
+      }));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `${COLLECTION_NAME}/${id}`);
     }
@@ -91,8 +102,7 @@ export const budgetService = {
 
   deleteBudgetCategory: async (id: string) => {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      await deleteDoc(docRef);
+      await budgetService.updateBudgetCategory(id, { deleted: true, active: false, isActive: false, enabled: false });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `${COLLECTION_NAME}/${id}`);
     }
@@ -110,12 +120,13 @@ export const budgetService = {
       const s = await getDocs(q);
       if (!s.empty) return;
 
-      for (const item of defaults) {
-        await addDoc(collection(db, COLLECTION_NAME), {
+      for (const { id, ...item } of defaults) {
+        await setDoc(doc(db, COLLECTION_NAME, `${uid}_${id}`), removeUndefinedFields({
           ...item,
+          defaultCategoryId: id,
           userId: uid,
           createdAt: serverTimestamp()
-        });
+        }));
       }
     } catch (err) {
       console.error("Failed to seed default budgets [Mobile]", err);

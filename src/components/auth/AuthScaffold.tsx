@@ -1,8 +1,9 @@
-import React from 'react';
+﻿import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowRight } from 'lucide-react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { Logo } from '../common/Logo';
+import { lightColors } from '../../theme/colors';
 
 export const GoogleLogo = ({ size = 28 }: { size?: number }) => (
   <Svg width={size} height={size} viewBox="0 0 48 48" accessibilityLabel="Google">
@@ -81,13 +82,14 @@ export const AuthInput = ({
   keyboardType = 'default',
   autoCapitalize = 'none',
   right,
-}: AuthInputProps) => (
-  <View style={styles.inputShell}>
+}: AuthInputProps) => {
+  const colors = lightColors;
+  return <View style={[styles.inputShell, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <View style={styles.inputIcon}>{icon}</View>
     <TextInput
-      style={styles.input}
+      style={[styles.input, { color: colors.text }]}
       placeholder={placeholder}
-      placeholderTextColor="#707A9B"
+      placeholderTextColor={colors.textMuted}
       value={value}
       onChangeText={onChangeText}
       secureTextEntry={secureTextEntry}
@@ -95,8 +97,8 @@ export const AuthInput = ({
       autoCapitalize={autoCapitalize}
     />
     {right}
-  </View>
-);
+  </View>;
+};
 
 export const PrimaryAuthButton = ({
   label,
@@ -136,16 +138,17 @@ export const SocialButton = ({
   loading: boolean;
   disabled: boolean;
   onPress: () => void;
-}) => (
-  <Pressable
-    style={({ pressed }) => [styles.socialButton, { opacity: disabled && !loading ? 0.7 : pressed ? 0.86 : 1 }]}
+}) => {
+  const colors = lightColors;
+  return <Pressable
+    style={({ pressed }) => [styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border, opacity: disabled && !loading ? 0.7 : pressed ? 0.86 : 1 }]}
     onPress={onPress}
     disabled={disabled}
   >
     {loading ? <ActivityIndicator size="small" color="#5748FF" /> : provider === 'google' ? <GoogleLogo /> : <AppleLogo />}
-    <Text style={styles.socialText}>{provider === 'google' ? 'Google' : 'Apple'}</Text>
+    <Text style={[styles.socialText, { color: colors.text }]}>{provider === 'google' ? 'Google' : 'Apple'}</Text>
   </Pressable>
-);
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },

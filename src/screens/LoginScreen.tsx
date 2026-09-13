@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import {
 } from '../components/auth/AuthScaffold';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthStackParamList } from '../navigation/types';
+import { lightColors } from '../theme/colors';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
 type AuthLoadingType = 'email' | 'google' | 'apple' | null;
@@ -25,6 +26,7 @@ export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const { signIn, signInWithGoogle, signInWithApple } = useAuth();
+  const colors = lightColors;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,7 +101,7 @@ export const LoginScreen: React.FC = () => {
   const isLoading = loadingType !== null;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TopBlob>
         <BlobCopy light={'Organize\nConquiste'} strong="Viva melhor" />
       </TopBlob>
@@ -120,7 +122,7 @@ export const LoginScreen: React.FC = () => {
 
         <View style={styles.hero}>
           <Text style={styles.eyebrow}>BEM-VINDO DE VOLTA!</Text>
-          <Text style={styles.title}>Que bom te ver{`\n`}novamente!</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Que bom te ver{`\n`}novamente!</Text>
           <Text style={styles.subtitle}>Acesse sua conta e continue cuidando da sua vida financeira.</Text>
         </View>
 
@@ -155,7 +157,7 @@ export const LoginScreen: React.FC = () => {
         <View style={styles.loginOptions}>
           <Pressable style={styles.keepRow} onPress={() => setKeepConnected((current) => !current)}>
             <View style={styles.checkbox}>{keepConnected && <Check size={19} color="#5748FF" strokeWidth={3} />}</View>
-            <Text style={styles.keepText}>Manter-me conectado</Text>
+            <Text style={[styles.keepText, { color: colors.textSecondary }]}>Manter-me conectado</Text>
           </Pressable>
           <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
             <Text style={styles.forgotText}>Esqueceu sua senha?</Text>
@@ -166,9 +168,9 @@ export const LoginScreen: React.FC = () => {
 
         <View style={styles.socialSection}>
           <View style={styles.dividerRow}>
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={styles.dividerText}>Ou entre com</Text>
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
           </View>
           <View style={styles.socialRow}>
             <SocialButton provider="google" loading={loadingType === 'google'} disabled={isLoading} onPress={handleGoogleLogin} />

@@ -81,6 +81,7 @@ export interface Transaction {
   paymentMethod?: string;
   sourceType?: 'account' | 'card';
   sourceName?: string;
+  accountId?: string;
   installments?: number;
   currentInstallment?: number;
   installmentGroupId?: string;
@@ -188,6 +189,8 @@ export interface SubscriptionTemplate {
 }
 
 export interface BudgetCategory {
+  deleted?: boolean;
+  defaultCategoryId?: string;
   id: string;
   name: string;
   percentage?: number;

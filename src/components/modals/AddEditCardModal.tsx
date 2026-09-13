@@ -26,6 +26,7 @@ import {
   WalletCards,
 } from 'lucide-react-native';
 import { CreditCardType } from '../../types';
+import { useTheme } from '../../contexts/ThemeContext';
 
 type CardFormData = Partial<CreditCardType> & {
   expirationDate?: string;
@@ -79,6 +80,7 @@ const getBrandShort = (brand: string) => BRAND_OPTIONS.find((item) => item.value
 const getLastDigits = (finalDigits: string) => finalDigits.replace(/\D/g, '').slice(0, 4);
 
 const BrandMark: React.FC<{ brand: string; selected?: boolean }> = ({ brand }) => {
+  const { colors } = useTheme();
   if (brand === 'mastercard') {
     return (
       <View style={styles.mastercardMark}>
@@ -87,7 +89,7 @@ const BrandMark: React.FC<{ brand: string; selected?: boolean }> = ({ brand }) =
       </View>
     );
   }
-  if (brand === 'other') return <MoreHorizontal size={25} color={MUTED} />;
+  if (brand === 'other') return <MoreHorizontal size={25} color={colors.textSecondary} />;
   return <Text style={[styles.brandLogoText, brand === 'amex' && styles.amexText, brand === 'hipercard' && styles.hipercardText]} numberOfLines={2}>{getBrandShort(brand)}</Text>;
 };
 
@@ -97,14 +99,24 @@ const FieldRow: React.FC<{
   children: React.ReactNode;
   compact?: boolean;
 }> = ({ icon, label, children, compact }) => (
-  <View style={[styles.fieldRow, compact && styles.fieldRowCompact]}>
-    <View style={styles.fieldIconBox}>{icon}</View>
+  <ThemedFieldRow icon={icon} label={label} compact={compact}>{children}</ThemedFieldRow>
+);
+
+const ThemedFieldRow: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+  compact?: boolean;
+}> = ({ icon, label, children, compact }) => {
+  const { colors } = useTheme();
+  return <View style={[styles.fieldRow, compact && styles.fieldRowCompact]}>
+    <View style={[styles.fieldIconBox, { backgroundColor: colors.primaryLight }]}>{icon}</View>
     <View style={styles.fieldBody}>
-      <Text style={styles.inputLabel} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.inputLabel, { color: colors.textSecondary }]} numberOfLines={1}>{label}</Text>
       {children}
     </View>
-  </View>
-);
+  </View>;
+};
 
 export const AddEditCardModal: React.FC<AddEditCardModalProps> = ({
   isOpen,
@@ -113,9 +125,11 @@ export const AddEditCardModal: React.FC<AddEditCardModalProps> = ({
   cardToEdit,
 }) => {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const pagePadding = getPagePadding(width);
   const compact = width < 360;
+  const inputStyle = [styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }];
 
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('visa');
@@ -197,19 +211,19 @@ export const AddEditCardModal: React.FC<AddEditCardModalProps> = ({
 
   return (
     <Modal visible={isOpen} animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 14) + 6, paddingHorizontal: pagePadding, paddingBottom: Math.max(insets.bottom, 16) + 22 }]}
         >
           <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.backButton} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Voltar">
-              <ChevronLeft size={24} color={TEXT} strokeWidth={2.8} />
+            <TouchableOpacity onPress={onClose} style={[styles.backButton, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Voltar">
+              <ChevronLeft size={24} color={colors.text} strokeWidth={2.8} />
             </TouchableOpacity>
             <View style={styles.headerCopy}>
-              <Text style={styles.title}>{cardToEdit ? 'Editar cartão' : 'Adicionar cartão'}</Text>
-              <Text style={styles.subtitle}>{cardToEdit ? 'Atualize as informações do seu cartão.' : 'Cadastre um novo cartão de crédito no Numvra.'}</Text>
+              <Text style={[styles.title, { color: colors.text }]}>{cardToEdit ? 'Editar cartão' : 'Adicionar cartão'}</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{cardToEdit ? 'Atualize as informações do seu cartão.' : 'Cadastre um novo cartão de crédito no Numvra.'}</Text>
             </View>
           </View>
 
@@ -232,9 +246,9 @@ export const AddEditCardModal: React.FC<AddEditCardModalProps> = ({
             {BRAND_OPTIONS.map((item) => {
               const selected = brand === item.value;
               return (
-                <TouchableOpacity key={item.value} onPress={() => setBrand(item.value)} style={[styles.brandOption, selected && styles.brandOptionSelected]} activeOpacity={0.85}>
-                  <View style={[styles.brandVisual, selected && styles.brandVisualSelected]}><BrandMark brand={item.value} /></View>
-                  <Text style={[styles.brandLabel, selected && styles.brandLabelSelected]}>{item.label}</Text>
+                <TouchableOpacity key={item.value} onPress={() => setBrand(item.value)} style={[styles.brandOption, { backgroundColor: selected ? colors.primaryLight : colors.surface, borderColor: selected ? PRIMARY : 'transparent' }]} activeOpacity={0.85}>
+                  <View style={[styles.brandVisual, { backgroundColor: selected ? colors.primaryLight : colors.card }]}><BrandMark brand={item.value} /></View>
+                  <Text style={[styles.brandLabel, { color: selected ? PRIMARY : colors.textSecondary }]}>{item.label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -242,52 +256,52 @@ export const AddEditCardModal: React.FC<AddEditCardModalProps> = ({
 
           {!!error && <Text style={styles.errorText}>{error}</Text>}
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Dados do cartão</Text>
+          <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Dados do cartão</Text>
             <FieldRow icon={<CreditCard size={22} color={PRIMARY} />} label="Nome do cartão (opcional)">
-              <TextInput value={name} onChangeText={setName} placeholder="Nubank" placeholderTextColor="#9AA1B8" style={styles.input} />
+              <TextInput value={name} onChangeText={setName} placeholder="Nubank" placeholderTextColor={colors.textMuted} style={inputStyle} />
             </FieldRow>
             <FieldRow icon={<CreditCard size={22} color={PRIMARY} />} label="Últimos 4 dígitos do cartão">
-              <TextInput value={finalDigits} onChangeText={(value) => setFinalDigits(value.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" placeholder="1234" placeholderTextColor="#9AA1B8" style={styles.input} maxLength={4} />
+              <TextInput value={finalDigits} onChangeText={(value) => setFinalDigits(value.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" placeholder="1234" placeholderTextColor={colors.textMuted} style={inputStyle} maxLength={4} />
             </FieldRow>
           </View>
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Configurações</Text>
-            <Text style={styles.sectionSubtitle}>Defina as informações e limites do seu cartão.</Text>
+          <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Configurações</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>Defina as informações e limites do seu cartão.</Text>
             <View style={styles.configGrid}>
               <FieldRow compact icon={<WalletCards size={21} color={PRIMARY} />} label="Limite total">
-                <TextInput value={formatMoneyInput(limitInput)} onChangeText={(value) => setLimitInput(value.replace(/\D/g, ''))} keyboardType="numeric" placeholder="R$ 0,00" placeholderTextColor="#9AA1B8" style={styles.input} />
+                <TextInput value={formatMoneyInput(limitInput)} onChangeText={(value) => setLimitInput(value.replace(/\D/g, ''))} keyboardType="numeric" placeholder="R$ 0,00" placeholderTextColor={colors.textMuted} style={inputStyle} />
               </FieldRow>
               <FieldRow compact icon={<CalendarDays size={21} color={PRIMARY} />} label="Dia de fechamento">
-                <TextInput value={closingDay} onChangeText={(value) => setClosingDay(normalizeDay(value))} keyboardType="number-pad" placeholder="Selecione" placeholderTextColor="#9AA1B8" style={styles.input} />
+                <TextInput value={closingDay} onChangeText={(value) => setClosingDay(normalizeDay(value))} keyboardType="number-pad" placeholder="Selecione" placeholderTextColor={colors.textMuted} style={inputStyle} />
               </FieldRow>
               <FieldRow compact icon={<CalendarDays size={21} color={PRIMARY} />} label="Dia de vencimento">
-                <TextInput value={dueDay} onChangeText={(value) => setDueDay(normalizeDay(value))} keyboardType="number-pad" placeholder="Selecione" placeholderTextColor="#9AA1B8" style={styles.input} />
+                <TextInput value={dueDay} onChangeText={(value) => setDueDay(normalizeDay(value))} keyboardType="number-pad" placeholder="Selecione" placeholderTextColor={colors.textMuted} style={inputStyle} />
               </FieldRow>
               <FieldRow compact icon={<Tag size={21} color={PRIMARY} />} label="Melhor dia de compra (opcional)">
-                <TextInput value={bestDay} onChangeText={(value) => setBestDay(normalizeDay(value))} keyboardType="number-pad" placeholder="Selecione" placeholderTextColor="#9AA1B8" style={styles.input} />
+                <TextInput value={bestDay} onChangeText={(value) => setBestDay(normalizeDay(value))} keyboardType="number-pad" placeholder="Selecione" placeholderTextColor={colors.textMuted} style={inputStyle} />
               </FieldRow>
             </View>
-            <View style={styles.tipCard}>
-              <View style={styles.tipIcon}><Lightbulb size={28} color={PRIMARY} /></View>
+            <View style={[styles.tipCard, { backgroundColor: colors.primaryLight }]}>
+              <View style={[styles.tipIcon, { backgroundColor: colors.surfaceVariant }]}><Lightbulb size={28} color={PRIMARY} /></View>
               <View style={styles.tipTextWrap}>
                 <Text style={styles.tipTitle}>Dica do Numvra</Text>
-                <Text style={styles.tipText}>O melhor dia de compra é a data em que você tem mais dias para pagar a fatura e manter o controle do seu limite.</Text>
+                <Text style={[styles.tipText, { color: colors.textSecondary }]}>O melhor dia de compra é a data em que você tem mais dias para pagar a fatura e manter o controle do seu limite.</Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Conta para pagamento</Text>
-            <Text style={styles.sectionSubtitle}>Selecione a conta que será usada para pagar a fatura.</Text>
-            <TouchableOpacity style={styles.accountCard} activeOpacity={0.85}>
+          <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Conta para pagamento</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>Selecione a conta que será usada para pagar a fatura.</Text>
+            <TouchableOpacity style={[styles.accountCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.85}>
               <View style={styles.accountIcon}><Wallet size={27} color="#FFFFFF" /></View>
               <View style={styles.accountInfo}>
-                <Text style={styles.accountName}>Conta padrão</Text>
-                <Text style={styles.accountMeta}>Conta principal • Saldo indisponível</Text>
+                <Text style={[styles.accountName, { color: colors.text }]}>Conta padrão</Text>
+                <Text style={[styles.accountMeta, { color: colors.textSecondary }]}>Conta principal • Saldo indisponível</Text>
               </View>
-              <ChevronRight size={24} color={TEXT} />
+              <ChevronRight size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
 

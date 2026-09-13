@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(12, 15, 25, 0.42)',
   },
   modalContent: {
     borderTopLeftRadius: 36,

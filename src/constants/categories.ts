@@ -63,7 +63,7 @@ export const toBudgetCategory = (category: SharedCategory): BudgetCategory => ({
   id: 'default-' + category.id,
   name: category.name,
   percentage: 0,
-  limitAmount: category.defaultLimit,
+  limitAmount: 0,
   icon: category.icon,
   color: category.color,
   backgroundColor: category.backgroundColor,
@@ -87,6 +87,12 @@ export const mergeWithDefaultCategories = (categories: BudgetCategory[]) => {
   });
 
   categories.forEach((category) => {
+    const original = DEFAULT_BUDGET_CATEGORIES.find((item) => item.id === category.defaultCategoryId);
+    if (original) merged.delete(normalizeCategoryName(original.name));
+    if (category.deleted) {
+      merged.delete(normalizeCategoryName(category.name));
+      return;
+    }
     const visual = getSharedCategoryByName(category.name);
     const base = visual ? toBudgetCategory(visual) : undefined;
     const key = normalizeCategoryName(category.name);

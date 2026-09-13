@@ -22,12 +22,12 @@ import {
 } from 'lucide-react-native';
 import { RootStackParamList } from '../navigation/types';
 import { useCategories } from '../contexts/CategoryContext';
-import { AddBudgetCategoryModal } from '../components/modals/AddBudgetCategoryModal';
-import { budgetService } from '../services/budgetService';
 import { useTransactions } from '../hooks/useTransactions';
 import { getCategoryVisual } from '../constants/iconRegistry';
-import { EXPENSE_CATEGORIES, getSharedCategoryByName, normalizeCategoryName } from '../constants/categories';
+import { getSharedCategoryByName, normalizeCategoryName } from '../constants/categories';
 import { BudgetCategory } from '../types';
+import { CategoryLimitEditor } from '../components/modals/CategoryLimitEditor';
+import { useTheme } from '../contexts/ThemeContext';
 
 const PRIMARY = '#5836FF';
 const TEXT = '#080D2F';
@@ -57,38 +57,36 @@ const categoryKey = (name?: string) => normalizeCategoryName(name);
 
 const BackButton = () => {
   const navigation = useNavigation<NavigationProp>();
+  const { colors } = useTheme();
   return (
-    <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.84}>
-      <ChevronLeft size={26} color={TEXT} strokeWidth={3} />
+    <TouchableOpacity style={[styles.backButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.goBack()} activeOpacity={0.84}>
+      <ChevronLeft size={26} color={colors.text} strokeWidth={3} />
     </TouchableOpacity>
   );
 };
 
-const Header = ({ title, subtitle }: { title: string; subtitle: string }) => (
-  <View style={styles.headerRow}>
-    <BackButton />
-    <View style={styles.headerCopy}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
-    </View>
-  </View>
-);
+const Header = ({ title, subtitle }: { title: string; subtitle: string }) => {
+  const { colors } = useTheme();
+  return <View style={styles.headerRow}><BackButton /><View style={styles.headerCopy}><Text style={[styles.title, { color: colors.text }]}>{title}</Text><Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text></View></View>;
+};
 
-const Tabs = <T extends string>({ tabs, active, onChange }: { tabs: T[]; active: T; onChange: (tab: T) => void }) => (
-  <View style={styles.tabsRow}>
+const Tabs = <T extends string>({ tabs, active, onChange }: { tabs: T[]; active: T; onChange: (tab: T) => void }) => {
+  const { colors } = useTheme();
+  return <View style={styles.tabsRow}>
     {tabs.map((tab) => {
       const selected = active === tab;
       return (
-        <TouchableOpacity key={tab} style={[styles.tab, selected && styles.activeTab]} onPress={() => onChange(tab)} activeOpacity={0.84}>
-          <Text style={[styles.tabText, selected && styles.activeTabText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.76}>{tab}</Text>
+        <TouchableOpacity key={tab} style={[styles.tab, { backgroundColor: selected ? colors.card : colors.surface, borderColor: selected ? PRIMARY : 'transparent' }]} onPress={() => onChange(tab)} activeOpacity={0.84}>
+          <Text style={[styles.tabText, { color: selected ? PRIMARY : colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.76}>{tab}</Text>
         </TouchableOpacity>
       );
     })}
-  </View>
-);
+  </View>;
+};
 
 const CategoryIcon = ({ category, size = 48 }: { category: Pick<BudgetCategory, 'icon' | 'color' | 'backgroundColor'>; size?: number }) => {
-  const visual = getCategoryVisual(category.icon, category.color);
+  const { isDarkMode } = useTheme();
+  const visual = getCategoryVisual(category.icon, category.color, isDarkMode);
   const Icon = visual.Icon;
   return (
     <View style={[styles.categoryIconBox, { width: size, height: size, borderRadius: 12, backgroundColor: category.backgroundColor || visual.backgroundColor }]}>
@@ -97,25 +95,28 @@ const CategoryIcon = ({ category, size = 48 }: { category: Pick<BudgetCategory, 
   );
 };
 
-const TipCard = () => (
-  <View style={styles.tipCard}>
-    <View style={styles.tipIconBox}>
+const TipCard = () => {
+  const { colors } = useTheme();
+  return <View style={[styles.tipCard, { backgroundColor: colors.primaryLight }]}>
+    <View style={[styles.tipIconBox, { backgroundColor: colors.surfaceVariant }]}>
       <Lightbulb size={30} color={PRIMARY} strokeWidth={2.3} />
     </View>
     <View style={styles.tipCopy}>
       <Text style={styles.tipTitle}>Dica do Numvra</Text>
-      <Text style={styles.tipText}>Revise seus limites mensalmente para manter suas finanças no controle.</Text>
+      <Text style={[styles.tipText, { color: colors.textSecondary }]}>Revise seus limites mensalmente para manter suas finanças no controle.</Text>
     </View>
-  </View>
-);
+  </View>;
+};
 
 export const CategoriesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const { categories } = useCategories();
+  const { colors, isDarkMode } = useTheme();
   const [tab, setTab] = useState<CategoryTab>('Todas');
   const [search, setSearch] = useState('');
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
 
   const filteredCategories = useMemo(() => {
     const query = normalizeCategoryName(search);
@@ -135,73 +136,57 @@ export const CategoriesScreen: React.FC = () => {
   }, [categories, search, tab]);
 
   const expenseCount = categories.filter((category) => (category.type || getSharedCategoryByName(category.name)?.type) === 'expense').length;
-  const totalAllocated = categories.reduce((sum, category) => sum + (category.percentage || 0), 0);
-
-  const handleCreateCategory = async (name: string, percentage: number, icon: string) => {
-    await budgetService.addBudgetCategory({
-      name,
-      percentage,
-      icon,
-      type: 'expense',
-      color: '#5748FF',
-      backgroundColor: '#F1EEFF',
-      active: true,
-      isActive: true,
-      enabled: true,
-    });
-  };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 18) + 18 }]} showsVerticalScrollIndicator={false}>
         <Header title="Categorias" subtitle="Organize suas movimentações com categorias." />
 
         <Tabs tabs={['Todas', 'Despesas', 'Receitas', 'Personalizadas']} active={tab} onChange={setTab} />
 
-        <View style={styles.searchBox}>
-          <Search size={21} color="#848CAA" strokeWidth={2.4} />
+        <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Search size={21} color={colors.textMuted} strokeWidth={2.4} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Buscar categoria..."
-            placeholderTextColor="#9AA1BE"
-            style={styles.searchInput}
+            placeholderTextColor={colors.textMuted}
+            style={[styles.searchInput, { color: colors.text }]}
           />
         </View>
 
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <ChevronDown size={20} color={TEXT} strokeWidth={3} />
-            <Text style={styles.sectionTitle}>{tab === 'Receitas' ? 'Receitas' : tab === 'Personalizadas' ? 'Personalizadas' : 'Despesas'}</Text>
+            <ChevronDown size={20} color={colors.text} strokeWidth={3} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{tab === 'Receitas' ? 'Receitas' : tab === 'Personalizadas' ? 'Personalizadas' : 'Despesas'}</Text>
           </View>
-          <Text style={styles.sectionCount}>{tab === 'Todas' || tab === 'Despesas' ? expenseCount : filteredCategories.length} categorias</Text>
+          <Text style={[styles.sectionCount, { color: colors.textSecondary }]}>{tab === 'Todas' || tab === 'Despesas' ? expenseCount : filteredCategories.length} categorias</Text>
         </View>
 
         <View style={styles.categoryList}>
           {filteredCategories.map((category) => (
-            <TouchableOpacity key={category.id} style={styles.categoryRow} activeOpacity={0.84}>
+            <TouchableOpacity key={category.id} style={[styles.categoryRow, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.84} onPress={() => { setEditingCategory(category); setIsAddCategoryOpen(true); }}>
               <CategoryIcon category={category} />
               <View style={styles.categoryTextWrap}>
-                <Text style={styles.categoryName}>{category.name}</Text>
-                <Text style={styles.categoryDescription} numberOfLines={1}>{category.description || getSharedCategoryByName(category.name)?.description || 'Categoria personalizada'}</Text>
+                <Text style={[styles.categoryName, { color: colors.text }]}>{category.name}</Text>
+                <Text style={[styles.categoryDescription, { color: colors.textSecondary }]} numberOfLines={1}>{category.description || getSharedCategoryByName(category.name)?.description || 'Categoria personalizada'}</Text>
               </View>
               <View style={[styles.colorDot, { backgroundColor: category.color || '#9AA0C3' }]} />
-              <ChevronRight size={22} color={TEXT} strokeWidth={2.7} />
+              <ChevronRight size={22} color={colors.text} strokeWidth={2.7} />
             </TouchableOpacity>
           ))}
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={() => setIsAddCategoryOpen(true)} activeOpacity={0.88}>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory(null); setIsAddCategoryOpen(true); }} activeOpacity={0.88}>
           <Plus size={24} color="#FFFFFF" strokeWidth={2.5} />
           <Text style={styles.primaryButtonText}>Nova categoria</Text>
         </TouchableOpacity>
       </ScrollView>
-      <AddBudgetCategoryModal
+      <CategoryLimitEditor
         isOpen={isAddCategoryOpen}
         onClose={() => setIsAddCategoryOpen(false)}
-        onSubmit={handleCreateCategory}
-        totalAllocated={totalAllocated}
+        category={editingCategory}
       />
     </SafeAreaView>
   );
@@ -211,26 +196,13 @@ export const CategoryLimitsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<LimitTab>('Todas');
   const { categories } = useCategories();
+  const { colors, isDarkMode } = useTheme();
   const { transactions } = useTransactions();
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
 
   const expenseCategories = useMemo(() => {
     const map = new Map(categories.map((category) => [categoryKey(category.name), category]));
-    EXPENSE_CATEGORIES.forEach((category) => {
-      if (!map.has(categoryKey(category.name))) {
-        map.set(categoryKey(category.name), {
-          id: 'default-' + category.id,
-          name: category.name,
-          type: category.type,
-          description: category.description,
-          icon: category.icon,
-          color: category.color,
-          backgroundColor: category.backgroundColor,
-          limitAmount: category.defaultLimit,
-          order: category.order,
-          sortOrder: category.order,
-        });
-      }
-    });
     return Array.from(map.values())
       .filter((category) => (category.type || getSharedCategoryByName(category.name)?.type || 'expense') === 'expense')
       .sort((a, b) => (a.sortOrder ?? a.order ?? 99) - (b.sortOrder ?? b.order ?? 99));
@@ -240,7 +212,7 @@ export const CategoryLimitsScreen: React.FC = () => {
     const spent = transactions
       .filter((transaction) => transaction.type === 'expense' && monthMatches(transaction.date) && categoryKey(transaction.category) === categoryKey(category.name))
       .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-    const limit = category.limitAmount || getSharedCategoryByName(category.name)?.defaultLimit || 0;
+    const limit = category.limitAmount ?? 0;
     const percent = limit > 0 ? Math.round((spent / limit) * 100) : 0;
     const fallback = getSharedCategoryByName(category.name);
     return {
@@ -262,26 +234,27 @@ export const CategoryLimitsScreen: React.FC = () => {
   const withLimit = rows.filter((row) => row.limit > 0).length;
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 18) + 24 }]} showsVerticalScrollIndicator={false}>
         <Header title="Limites por categoria" subtitle="Defina quanto deseja gastar em cada categoria por mês." />
 
-        <View style={styles.budgetSummaryCard}>
-          <View style={styles.summaryIconBox}>
+        <View style={[styles.budgetSummaryCard, { backgroundColor: colors.primaryLight }]}>
+          <View style={[styles.summaryIconBox, { backgroundColor: colors.surfaceVariant }]}>
             <BarChart3 size={34} color={PRIMARY} strokeWidth={2.6} />
           </View>
           <View style={styles.summaryCopy}>
-            <Text style={styles.summaryLabel}>Orçamento do mês</Text>
-            <Text style={styles.summaryValue}>{money(totalBudget || 4200)}</Text>
-            <Text style={styles.summaryHint}>{withLimit || 7} de {rows.length || 12} categorias com limite</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Total dos limites mensais</Text>
+            <Text style={[styles.summaryValue, { color: colors.text }]}>{money(totalBudget)}</Text>
+            <Text style={[styles.summaryHint, { color: colors.textSecondary }]}>{withLimit} de {rows.length} categorias com limite</Text>
           </View>
-          <TouchableOpacity style={styles.adjustButton} activeOpacity={0.84}>
-            <Text style={styles.adjustButtonText}>Ajustar total</Text>
-          </TouchableOpacity>
         </View>
 
         <Tabs tabs={['Todas', 'Com limite', 'Sem limite']} active={tab} onChange={setTab} />
+        <Text style={[styles.summaryHint, { color: colors.textSecondary }]}>O total é a soma dos limites definidos por você. Toque em uma categoria para editar ou excluir.</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory(null); setEditorOpen(true); }}>
+          <Plus size={22} color="#FFFFFF" /><Text style={styles.primaryButtonText}>Nova categoria</Text>
+        </TouchableOpacity>
 
         <View style={styles.limitList}>
           {filteredRows.map((row) => {
@@ -289,27 +262,27 @@ export const CategoryLimitsScreen: React.FC = () => {
             const progress = row.limit > 0 ? Math.min(row.percent, 124) : 0;
             const progressColor = overLimit ? DANGER : row.percent >= 80 ? (row.name === 'Moradia' || row.name === 'Assinaturas' ? PRIMARY : SUCCESS) : row.percent >= 45 ? WARNING : SUCCESS;
             return (
-              <TouchableOpacity key={row.id} style={styles.limitRow} activeOpacity={0.84}>
+              <TouchableOpacity key={row.id} style={[styles.limitRow, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.84} onPress={() => { setEditingCategory(row); setEditorOpen(true); }}>
                 <CategoryIcon category={row} size={46} />
                 <View style={styles.limitBody}>
                   <View style={styles.limitTopLine}>
-                    <Text style={styles.limitName}>{row.name}</Text>
-                    <Text style={styles.limitValue}>{row.limit > 0 ? money(row.limit) : 'Sem limite'}</Text>
+                    <Text style={[styles.limitName, { color: colors.text }]}>{row.name}</Text>
+                    <Text style={[styles.limitValue, { color: colors.text }]}>{row.limit > 0 ? money(row.limit) : 'Sem limite'}</Text>
                   </View>
-                  <View style={styles.progressTrack}>
+                  <View style={[styles.progressTrack, { backgroundColor: colors.surfaceVariant }]}>
                     <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(progress, 100))}%`, backgroundColor: progressColor }]} />
                   </View>
                   <View style={styles.limitBottomLine}>
-                    <Text style={styles.limitMeta}>{row.limit > 0 ? `${money(row.spent)} gastos` : 'Nenhum gasto registrado'}</Text>
+                    <Text style={[styles.limitMeta, { color: colors.textSecondary }]}>{money(row.spent)} gastos</Text>
                     {row.limit > 0 && (
-                      <Text style={[styles.limitMeta, overLimit && styles.overLimitText]}>
+                      <Text style={[styles.limitMeta, { color: overLimit ? DANGER : colors.textSecondary }]}>
                         {overLimit ? `${money(row.spent - row.limit)} acima do limite` : `${money(Math.max(row.limit - row.spent, 0))} restantes`}
                       </Text>
                     )}
                   </View>
                 </View>
-                {row.limit > 0 && <Text style={[styles.limitPercent, overLimit && styles.overLimitText]}>{row.percent}%</Text>}
-                <ChevronRight size={22} color={TEXT} strokeWidth={2.7} />
+                {row.limit > 0 && <Text style={[styles.limitPercent, { color: overLimit ? DANGER : colors.textSecondary }]}>{row.percent}%</Text>}
+                <ChevronRight size={22} color={colors.text} strokeWidth={2.7} />
               </TouchableOpacity>
             );
           })}
@@ -317,6 +290,7 @@ export const CategoryLimitsScreen: React.FC = () => {
 
         <TipCard />
       </ScrollView>
+      <CategoryLimitEditor isOpen={editorOpen} onClose={() => setEditorOpen(false)} category={editingCategory} />
     </SafeAreaView>
   );
 };

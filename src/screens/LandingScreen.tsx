@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,15 @@ import { Logo } from '../components/common/Logo';
 import { PeripheralGlowBackground } from '../components/common/PeripheralGlowBackground';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthStackParamList } from '../navigation/types';
+import { lightColors } from '../theme/colors';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
 
 export const LandingScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { user, loading } = useAuth();
+  const colors = lightColors;
+  const isDarkMode = false;
   const [isSplashing, setIsSplashing] = useState(true);
 
   const logoYAnim = useRef(new Animated.Value(0)).current;
@@ -59,7 +62,7 @@ export const LandingScreen: React.FC = () => {
   }, [user, loading, logoYAnim, logoScaleAnim, buttonYAnim]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <PeripheralGlowBackground />
       {/* Center of the screen - Logo container */}
       <View style={styles.logoSection}>
@@ -87,7 +90,7 @@ export const LandingScreen: React.FC = () => {
         >
           <Pressable
             style={({ pressed }) => [
-              styles.loginButton,
+              styles.loginButton, { backgroundColor: isDarkMode ? colors.primary : '#111827' },
               pressed && styles.loginButtonPressed,
             ]}
             onPress={() => navigation.navigate('Login')}
@@ -97,12 +100,12 @@ export const LandingScreen: React.FC = () => {
 
           <Pressable
             style={({ pressed }) => [
-              styles.registerButton,
+              styles.registerButton, { backgroundColor: colors.card, borderColor: isDarkMode ? colors.primary : '#111827' },
               pressed && styles.registerButtonPressed,
             ]}
             onPress={() => navigation.navigate('Register')}
           >
-            <Text style={styles.registerButtonText}>Cadastrar</Text>
+            <Text style={[styles.registerButtonText, { color: colors.text }]}>Cadastrar</Text>
           </Pressable>
         </Animated.View>
       )}

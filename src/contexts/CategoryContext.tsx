@@ -33,7 +33,7 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLoading(true);
     setError(null);
     return budgetService.subscribeToBudgetCategories(
-      (nextCategories) => { setCategories(mergeWithDefaultCategories(nextCategories)); setLoading(false); },
+      (nextCategories) => { setCategories(nextCategories); setLoading(false); },
       (listenerError) => { setError(listenerError); setLoading(false); },
     );
   }, [user, reloadToken]);

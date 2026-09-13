@@ -195,7 +195,7 @@ export const CardsScreen: React.FC = () => {
             <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={1.15}>Cartões</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.2}>Gerencie seus cartões e tenha mais controle.</Text>
           </View>
-          <TouchableOpacity style={styles.addCardButton} onPress={openAddCard} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.addCardButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={openAddCard} activeOpacity={0.85}>
             <View style={styles.addCardIcon}><Plus size={18} color="#FFFFFF" strokeWidth={2.5} /></View>
             <Text style={styles.addCardText} maxFontSizeMultiplier={1.15}>Adicionar cartão</Text>
           </TouchableOpacity>
@@ -204,7 +204,7 @@ export const CardsScreen: React.FC = () => {
         {loading ? (
           <View style={styles.loadingState}><ActivityIndicator color={PRIMARY} /></View>
         ) : cards.length === 0 ? (
-          <View style={styles.emptyState}>
+          <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <CreditCard size={30} color={PRIMARY} />
             <Text style={[styles.emptyTitle, { color: colors.text }]}>Nenhum cartão cadastrado</Text>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Adicione seu primeiro cartão para acompanhar faturas e limites.</Text>
@@ -234,19 +234,19 @@ export const CardsScreen: React.FC = () => {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabsRow, { paddingHorizontal: pagePadding }]}>
               {TABS.map((tab) => (
-                <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} activeOpacity={0.85} style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}>
-                  <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+                <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} activeOpacity={0.85} style={[styles.tabPill, { backgroundColor: activeTab === tab ? PRIMARY : colors.surface }, activeTab === tab && styles.tabPillActive]}>
+                  <Text style={[styles.tabText, { color: activeTab === tab ? '#FFFFFF' : colors.textSecondary }, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
             {activeCard && activeCardFinancials && (
-              <View style={[styles.summaryCard, { marginHorizontal: pagePadding, padding: compactScreen ? 11 : 13, gap: compactScreen ? 7 : 8 }]}>
+              <View style={[styles.summaryCard, { marginHorizontal: pagePadding, padding: compactScreen ? 11 : 13, gap: compactScreen ? 7 : 8, backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.invoiceColumn}>
-                  <Text style={styles.sectionOverline}>Fatura atual</Text>
+                  <Text style={[styles.sectionOverline, { color: colors.text }]}>Fatura atual</Text>
                   <Text style={[styles.invoiceAmount, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.1}>{formatCurrency(activeCardFinancials.usedLimit)}</Text>
                   <Text style={[styles.invoiceDue, { color: colors.textSecondary }]}>Vence em {getDueMonthLabel(dueDay)}</Text>
-                  <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${activeCardFinancials.usedPercent}%` }]} /></View>
+                  <View style={[styles.progressTrack, { backgroundColor: colors.surfaceVariant }]}><View style={[styles.progressFill, { width: `${activeCardFinancials.usedPercent}%` }]} /></View>
                   <View style={styles.limitsRow}>
                     <View style={styles.limitBlock}>
                       <Text style={[styles.limitLabel, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>Utilizado</Text>
@@ -287,25 +287,25 @@ export const CardsScreen: React.FC = () => {
             )}
 
             <View style={[styles.quickActionsRow, { paddingHorizontal: pagePadding, gap: compactScreen ? 8 : 12 }]}>
-              <TouchableOpacity style={styles.quickAction} onPress={() => setIsPayModalOpen(true)} activeOpacity={0.85}>
+              <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.surface }]} onPress={() => setIsPayModalOpen(true)} activeOpacity={0.85}>
                 <FileText size={compactScreen ? 23 : 25} color={PRIMARY} />
                 <Text style={[styles.quickActionText, { color: colors.text }]}>Pagar fatura</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickAction} onPress={openEditCard} activeOpacity={0.85}>
+              <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.surface }]} onPress={openEditCard} activeOpacity={0.85}>
                 <PieChart size={compactScreen ? 23 : 25} color={PRIMARY} />
                 <Text style={[styles.quickActionText, { color: colors.text }]}>Ajustar limite</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickAction} activeOpacity={0.85}>
+              <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.surface }]} activeOpacity={0.85}>
                 <Lock size={compactScreen ? 23 : 25} color={PRIMARY} />
                 <Text style={[styles.quickActionText, { color: colors.text }]}>Bloquear cartão</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickAction} onPress={openEditCard} activeOpacity={0.85}>
+              <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.surface }]} onPress={openEditCard} activeOpacity={0.85}>
                 <Settings size={compactScreen ? 23 : 25} color={PRIMARY} />
                 <Text style={[styles.quickActionText, { color: colors.text }]}>Configurações</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.transactionsCard, { marginHorizontal: pagePadding }]}>
+            <View style={[styles.transactionsCard, { marginHorizontal: pagePadding, backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Últimas transações</Text>
                 <TouchableOpacity onPress={() => navigation.navigate('Statement')} activeOpacity={0.85}>
@@ -315,7 +315,7 @@ export const CardsScreen: React.FC = () => {
               {latestCardTransactions.length === 0 ? (
                 <Text style={[styles.noTransactionsText, { color: colors.textSecondary }]}>Nenhuma transação encontrada para este cartão.</Text>
               ) : latestCardTransactions.map((tx, index) => (
-                <TouchableOpacity key={tx.id || `${tx.title}-${index}`} style={[styles.transactionRow, index === latestCardTransactions.length - 1 && styles.transactionRowLast]} activeOpacity={0.8}>
+                <TouchableOpacity key={tx.id || `${tx.title}-${index}`} style={[styles.transactionRow, { borderBottomColor: colors.border }, index === latestCardTransactions.length - 1 && styles.transactionRowLast]} activeOpacity={0.8}>
                   <TransactionIcon
                     transaction={tx}
                     icon={tx.icon || categoriesByName.get(tx.category?.trim().toLowerCase())?.icon || 'tag'}
@@ -333,8 +333,8 @@ export const CardsScreen: React.FC = () => {
               ))}
             </View>
 
-            <TouchableOpacity style={[styles.tipCard, { marginHorizontal: pagePadding }]} activeOpacity={0.85}>
-              <View style={styles.tipIconBox}><Lightbulb size={26} color={PRIMARY} /></View>
+            <TouchableOpacity style={[styles.tipCard, { marginHorizontal: pagePadding, backgroundColor: colors.primaryLight }]} activeOpacity={0.85}>
+              <View style={[styles.tipIconBox, { backgroundColor: colors.surfaceVariant }]}><Lightbulb size={26} color={PRIMARY} /></View>
               <View style={styles.tipTextWrap}>
                 <Text style={styles.tipTitle}>Dica do Numvra</Text>
                 <Text style={[styles.tipText, { color: colors.textSecondary }]}>Concentre seus gastos no melhor dia de compra e tenha mais tempo para pagar a fatura.</Text>

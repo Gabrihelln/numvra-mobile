@@ -62,6 +62,23 @@ service cloud.firestore {
     }
 
     // 4. Transaction Blueprint
+    function isValidAccount(data) {
+      return data.keys().hasAll(['userId', 'name', 'accountType', 'accountKind', 'balance', 'currency', 'source', 'isManual', 'isActive']) &&
+        data.keys().hasOnly(['userId', 'name', 'accountType', 'accountKind', 'institutionId', 'institutionName', 'institutionIcon', 'agency', 'accountNumber', 'balance', 'currency', 'source', 'openFinanceProviderId', 'openFinanceConsentId', 'openFinanceStatus', 'isManual', 'isActive', 'createdAt', 'updatedAt']) &&
+        isOwner(data.userId) && data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.accountType in ['checking', 'savings', 'salary', 'payment', 'investment', 'cash'] &&
+        data.accountKind in ['bank', 'wallet', 'cash', 'investment'] &&
+        data.balance is number && data.currency == 'BRL' &&
+        data.source in ['manual', 'open_finance'] && data.isManual is bool && data.isActive is bool;
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isSignedIn() && isValidAccount(incoming());
+      allow update: if isOwner(existing().userId) && incoming().userId == existing().userId && isValidAccount(incoming());
+      allow delete: if isOwner(existing().userId);
+    }
+
     function hasOnlyValidTransactionFields(data) {
       return data.keys().hasOnly([
         'userId',
@@ -78,6 +95,9 @@ service cloud.firestore {
         'cardId',
         'cardName',
         'paymentMethod',
+        'notes', 'publicId', 'sourceType', 'sourceName', 'accountId',
+        'installmentGroupId', 'installmentNumber', 'installmentTotal',
+        'parentTransactionId', 'recurrencePeriod', 'nextBilling', 'transactionEvents',
         'installments',
         'currentInstallment',
         'isRecurring',
@@ -104,6 +124,12 @@ service cloud.firestore {
              (!('cardId' in data) || data.cardId is string) &&
              (!('cardName' in data) || data.cardName is string) &&
              (!('paymentMethod' in data) || data.paymentMethod is string) &&
+             (!('accountId' in data) || data.accountId is string) &&
+             (!('sourceType' in data) || data.sourceType in ['account', 'card']) &&
+             (!('sourceName' in data) || data.sourceName is string) &&
+             (!('notes' in data) || data.notes is string) &&
+             (!('publicId' in data) || data.publicId is string) &&
+             (!('transactionEvents' in data) || data.transactionEvents is list) &&
              (!('installments' in data) || data.installments is number) &&
              (!('currentInstallment' in data) || data.currentInstallment is number) &&
              (!('isRecurring' in data) || data.isRecurring is bool) &&
@@ -250,11 +276,15 @@ service cloud.firestore {
 
     // 7. Budget Category Blueprint
     function isValidBudgetCategory(data) {
-      return data.keys().hasAll(['userId', 'name', 'percentage', 'icon']) &&
-             data.keys().size() <= 8 &&
+      return data.keys().hasAll(['userId', 'name', 'icon']) &&
+             data.keys().hasOnly(['id', 'userId', 'name', 'percentage', 'icon', 'limitAmount', 'type', 'color', 'backgroundColor', 'description', 'aliases', 'active', 'isActive', 'enabled', 'order', 'sortOrder', 'position', 'createdAt', 'updatedAt', 'deleted', 'defaultCategoryId']) &&
              data.userId == request.auth.uid &&
              data.name is string && data.name.size() <= 100 &&
-             data.percentage is number &&
+             (!('percentage' in data) || (data.percentage is number && data.percentage >= 0 && data.percentage <= 100)) &&
+             (!('limitAmount' in data) || (data.limitAmount is number && data.limitAmount >= 0)) &&
+             (!('deleted' in data) || data.deleted is bool) &&
+             (!('defaultCategoryId' in data) || data.defaultCategoryId is string) &&
+             (!('type' in data) || data.type in ['expense', 'income']) &&
              data.icon is string && data.icon.size() <= 50;
     }
 

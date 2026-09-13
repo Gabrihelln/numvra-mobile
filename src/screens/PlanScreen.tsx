@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { initStripe, useStripe } from '@stripe/stripe-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -11,6 +12,8 @@ import { planService } from '../services/planService';
 import { RootStackParamList } from '../navigation/types';
 import { SubscriptionPlan } from '../types';
 import { BillingPeriod, PlanId, normalizePlanId } from '../config/planCatalog';
+import { MOBILE_PAYMENT_SHEET_ENABLED, resolveStripePublishableKey, STRIPE_RETURN_URL } from '../config/subscriptionConfig';
+import { mobileSubscriptionService, MobileSubscriptionError } from '../services/mobileSubscriptionService';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenMode = 'current' | 'upgrade';
@@ -90,6 +93,7 @@ export const PlanScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { activePlan, profile, isPlanExpired } = useAuth();
   const { isDarkMode } = useTheme();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [mode, setMode] = useState<ScreenMode>('current');
@@ -151,11 +155,37 @@ export const PlanScreen: React.FC = () => {
     if (planId === 'basic') return handleManage();
     setSubmitting(true);
     try {
-      await checkoutService.startCheckout(plan.id, plan.name, selectedPeriod);
-      Alert.alert('Checkout aberto', 'Conclua o pagamento no Stripe. Seu plano será atualizado automaticamente após a confirmação.');
+      if (MOBILE_PAYMENT_SHEET_ENABLED && Platform.OS !== 'web') {
+        const session = await mobileSubscriptionService.create(plan.id, selectedPeriod);
+        const publishableKey = resolveStripePublishableKey(session as unknown as Record<string, unknown>);
+        if (!publishableKey || !publishableKey.startsWith('pk_')) throw new MobileSubscriptionError('A chave pública do Stripe não está configurada.');
+        await initStripe({ publishableKey, urlScheme: 'numvra', setReturnUrlSchemeOnAndroid: true });
+        const customerKey = session.customerEphemeralKeySecret || session.ephemeralKeySecret;
+        const { error: initError } = await initPaymentSheet({
+          merchantDisplayName: session.merchantDisplayName || 'Numvra',
+          customerId: session.customerId,
+          customerEphemeralKeySecret: customerKey,
+          customerSessionClientSecret: customerKey ? undefined : session.customerSessionClientSecret,
+          paymentIntentClientSecret: session.paymentIntentClientSecret,
+          allowsDelayedPaymentMethods: false,
+          returnURL: STRIPE_RETURN_URL,
+          appearance: { colors: { primary: '#5748FF', background: isDarkMode ? '#121214' : '#FFFFFF', componentBackground: isDarkMode ? '#1E1E26' : '#FFFFFF', componentBorder: isDarkMode ? '#2A2A32' : '#E9ECF6', componentDivider: isDarkMode ? '#2A2A32' : '#E9ECF6', primaryText: isDarkMode ? '#F8FAFC' : '#080D2D', secondaryText: isDarkMode ? '#A1A1AA' : '#687292', componentText: isDarkMode ? '#F8FAFC' : '#080D2D', placeholderText: isDarkMode ? '#71717A' : '#687292', icon: isDarkMode ? '#F8FAFC' : '#080D2D', error: '#E11919' }, shapes: { borderRadius: 14 } },
+        });
+        if (initError) throw new MobileSubscriptionError(initError.localizedMessage || 'Não foi possível preparar o formulário de pagamento.');
+        const { error: presentError } = await presentPaymentSheet();
+        if (presentError) {
+          if (presentError.code === 'Canceled') return;
+          throw new MobileSubscriptionError(presentError.localizedMessage || 'O pagamento não foi concluído.');
+        }
+        Alert.alert('Pagamento enviado', 'Estamos confirmando seu pagamento. Seu plano será atualizado automaticamente após a confirmação do Stripe.');
+      } else {
+        await checkoutService.startCheckout(plan.id, selectedPeriod);
+        Alert.alert('Checkout aberto', 'Conclua o pagamento no Stripe. Seu plano será atualizado automaticamente após a confirmação.');
+      }
     } catch (err) {
       console.error('Checkout failed:', err);
-      Alert.alert('Erro no pagamento', err instanceof CheckoutError ? err.message : 'Não foi possível iniciar o pagamento.');
+      if (err instanceof MobileSubscriptionError && err.status === 409) Alert.alert('Assinatura já ativa', 'Você já possui uma assinatura ativa. Gerencie-a pelo botão “Gerenciar assinatura”.');
+      else Alert.alert('Erro no pagamento', err instanceof CheckoutError || err instanceof MobileSubscriptionError ? err.message : 'Não foi possível iniciar o pagamento.');
     } finally {
       setSubmitting(false);
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChevronLeft, Mail, CheckCircle } from 'lucide-react-native';
 import { Logo } from '../components/common/Logo';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
+import { lightColors } from '../theme/colors';
 import { AuthStackParamList } from '../navigation/types';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
@@ -26,7 +26,8 @@ export const ForgotPasswordScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const { sendPasswordReset } = useAuth();
-  const { colors, isDarkMode } = useTheme();
+  const colors = lightColors;
+  const isDarkMode = false;
 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);

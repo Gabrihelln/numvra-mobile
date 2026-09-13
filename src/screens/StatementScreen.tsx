@@ -441,10 +441,10 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
               <Text style={[styles.statementTitle, { color: colors.text }]} maxFontSizeMultiplier={1.15}>Extrato</Text>
               <Text style={[styles.statementSubtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.2}>Acompanhe todas as suas movimentações.</Text>
             </View>
-            <TouchableOpacity onPress={() => setIsStatementMonthPickerOpen(true)} style={[styles.monthSelector, compactStatement && styles.monthSelectorCompact]} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Selecionar mês do extrato">
+            <TouchableOpacity onPress={() => setIsStatementMonthPickerOpen(true)} style={[styles.monthSelector, { backgroundColor: colors.card, borderColor: colors.border }, compactStatement && styles.monthSelectorCompact]} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Selecionar mês do extrato">
               <CalendarIcon size={compactStatement ? 19 : 21} color={PRIMARY} />
-              <Text style={styles.monthSelectorText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{formatStatementMonthLabel(selectedMonth)}</Text>
-              <ChevronDown size={19} color="#6F7894" />
+              <Text style={[styles.monthSelectorText, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{formatStatementMonthLabel(selectedMonth)}</Text>
+              <ChevronDown size={19} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -452,7 +452,7 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
         <View style={[styles.subscriptionsHeader, { paddingTop: Math.max(insets.top, 16) + 12, paddingHorizontal: statementPagePadding }]}>
           <View style={styles.subscriptionsHeaderRow}>
             <BackButton onPress={() => navigation.goBack()} />
-            <TouchableOpacity onPress={handleCreateSubscription} style={styles.subscriptionsAddTopButton} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Criar nova assinatura">
+            <TouchableOpacity onPress={handleCreateSubscription} style={[styles.subscriptionsAddTopButton, { backgroundColor: colors.primaryLight }]} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Criar nova assinatura">
               <Plus size={25} color={PRIMARY} strokeWidth={2.4} />
             </TouchableOpacity>
           </View>
@@ -491,21 +491,21 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
               {transactionFilters.map((filter) => {
                 const selected = transactionFilter === filter.key;
                 return (
-                  <TouchableOpacity key={filter.key} onPress={() => setTransactionFilter(filter.key)} style={[styles.typeFilterChip, selected && styles.typeFilterChipActive]} activeOpacity={0.85}>
-                    <Text style={[styles.typeFilterText, selected && styles.typeFilterTextActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{filter.label}</Text>
+                  <TouchableOpacity key={filter.key} onPress={() => setTransactionFilter(filter.key)} style={[styles.typeFilterChip, { backgroundColor: selected ? PRIMARY : colors.surface }, selected && styles.typeFilterChipActive]} activeOpacity={0.85}>
+                    <Text style={[styles.typeFilterText, { color: selected ? '#FFFFFF' : colors.textSecondary }, selected && styles.typeFilterTextActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{filter.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
             <View style={styles.searchFilterRow}>
-              <View style={styles.statementSearchBar}>
-                <Search size={22} color="#6F7894" />
-                <TextInput value={transactionSearch} onChangeText={setTransactionSearch} placeholder="Buscar transações..." placeholderTextColor="#8A93AC" style={styles.statementSearchInput} autoCapitalize="none" autoCorrect={false} accessibilityLabel="Buscar transações" />
-                {!!transactionSearch && <TouchableOpacity onPress={() => setTransactionSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><X size={16} color="#8A93AC" /></TouchableOpacity>}
+              <View style={[styles.statementSearchBar, { backgroundColor: colors.surface }]}>
+                <Search size={22} color={colors.textSecondary} />
+                <TextInput value={transactionSearch} onChangeText={setTransactionSearch} placeholder="Buscar transações..." placeholderTextColor={colors.textMuted} style={[styles.statementSearchInput, { color: colors.text }]} autoCapitalize="none" autoCorrect={false} accessibilityLabel="Buscar transações" />
+                {!!transactionSearch && <TouchableOpacity onPress={() => setTransactionSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><X size={16} color={colors.textMuted} /></TouchableOpacity>}
               </View>
-              <TouchableOpacity style={styles.advancedFilterButton} onPress={cycleTransactionFilter} activeOpacity={0.85}>
-                <SlidersHorizontal size={22} color="#596174" />
-                <Text style={styles.advancedFilterText}>Filtros</Text>
+              <TouchableOpacity style={[styles.advancedFilterButton, { backgroundColor: colors.surface }]} onPress={cycleTransactionFilter} activeOpacity={0.85}>
+                <SlidersHorizontal size={22} color={colors.textSecondary} />
+                <Text style={[styles.advancedFilterText, { color: colors.textSecondary }]}>Filtros</Text>
               </TouchableOpacity>
             </View>
             {transactionGroups.length === 0 ? (
@@ -527,7 +527,7 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
                       const positive = item.type === 'income';
                       const categoryVisual = positive ? { color: INCOME, backgroundColor: '#E7F8EF' } : { color: '#E43A57', backgroundColor: '#FDE7EC' };
                       return (
-                        <TouchableOpacity key={item.id} style={[styles.statementTxCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF', borderColor: isDarkMode ? '#2D2D3A' : '#E9ECF5' }]} activeOpacity={0.85} onPress={() => navigation.navigate('TransactionDetail', { transactionId: item.id })} onLongPress={() => handleDeleteTransaction(item)}>
+                        <TouchableOpacity key={item.id} style={[styles.statementTxCard, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.85} onPress={() => navigation.navigate('TransactionDetail', { transactionId: item.id })} onLongPress={() => handleDeleteTransaction(item)}>
                           <View style={styles.statementTxLeft}>
                             <TransactionIcon transaction={item} icon={item.icon || categoriesByName.get(item.category?.trim().toLowerCase())?.icon || 'tag'} category={item.category} categoryColor={item.categoryColor || categoriesByName.get(item.category?.trim().toLowerCase())?.color} type={item.type} />
                             <View style={styles.statementTxInfo}>
@@ -541,7 +541,7 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
                               <Text style={[styles.statementTxAmount, { color: positive ? INCOME : EXPENSE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>{positive ? '+ ' : '- '}{formatCurrency(item.amount)}</Text>
                               <View style={[styles.categoryBadge, { backgroundColor: categoryVisual.backgroundColor }]}><Text style={[styles.categoryBadgeText, { color: categoryVisual.color }]} numberOfLines={1}>{category}</Text></View>
                             </View>
-                            <ChevronRight size={20} color="#6F7894" />
+                            <ChevronRight size={20} color={colors.textSecondary} />
                           </View>
                         </TouchableOpacity>
                       );
@@ -558,23 +558,23 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
                 const selected = subscriptionStatusFilter === tab;
                 return (
                   <TouchableOpacity key={tab} onPress={() => setSubscriptionStatusFilter(tab)} style={styles.subscriptionTabButton} activeOpacity={0.82}>
-                    <Text style={[styles.subscriptionTabText, selected && styles.subscriptionTabTextActive]}>{tab === 'active' ? 'Ativas' : 'Canceladas'}</Text>
-                    <View style={[styles.subscriptionTabLine, selected && styles.subscriptionTabLineActive]} />
+                    <Text style={[styles.subscriptionTabText, { color: selected ? PRIMARY : colors.textSecondary }, selected && styles.subscriptionTabTextActive]}>{tab === 'active' ? 'Ativas' : 'Canceladas'}</Text>
+                    <View style={[styles.subscriptionTabLine, { backgroundColor: selected ? PRIMARY : colors.border }, selected && styles.subscriptionTabLineActive]} />
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <View style={styles.subsSummaryCard}>
-              <View style={styles.subsSummaryIconBox}>
+            <View style={[styles.subsSummaryCard, { backgroundColor: colors.surface }]}>
+              <View style={[styles.subsSummaryIconBox, { backgroundColor: colors.primaryLight }]}>
                 <BarChart3 size={31} color={PRIMARY} strokeWidth={2.5} />
               </View>
               <View style={styles.subsSummaryCopy}>
-                <Text style={styles.subsSummaryLabel}>Seu gasto mensal de assinaturas</Text>
-                <Text style={styles.subsSummaryTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>{formatCurrency(totalMonthlySubs)}</Text>
-                <Text style={styles.subsSummaryYearly} numberOfLines={1}>Valor anual: <Text style={styles.subsSummaryYearlyStrong}>{formatCurrency(totalYearlySubs)}</Text></Text>
+                <Text style={[styles.subsSummaryLabel, { color: colors.textSecondary }]}>Seu gasto mensal de assinaturas</Text>
+                <Text style={[styles.subsSummaryTotal, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>{formatCurrency(totalMonthlySubs)}</Text>
+                <Text style={[styles.subsSummaryYearly, { color: colors.textSecondary }]} numberOfLines={1}>Valor anual: <Text style={[styles.subsSummaryYearlyStrong, { color: colors.text }]}>{formatCurrency(totalYearlySubs)}</Text></Text>
               </View>
-              <View style={styles.subsSummaryNeutralBadge}>
+              <View style={[styles.subsSummaryNeutralBadge, { backgroundColor: colors.card }]}>
                 <Text style={styles.subsSummaryNeutralText}>Sem histórico</Text>
                 <Text style={styles.subsSummaryNeutralSubtext}>mês anterior</Text>
               </View>
@@ -586,9 +586,9 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
             </TouchableOpacity>
 
             {visibleSubscriptions.length === 0 ? (
-              <View style={styles.subscriptionsEmptyCard}>
-                <Text style={styles.subscriptionsEmptyTitle}>{subscriptionStatusFilter === 'active' ? 'Nenhuma assinatura ativa' : 'Nenhuma assinatura cancelada.'}</Text>
-                {subscriptionStatusFilter === 'active' && <Text style={styles.subscriptionsEmptySubtitle}>Adicione suas assinaturas para acompanhar seus gastos recorrentes.</Text>}
+              <View style={[styles.subscriptionsEmptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.subscriptionsEmptyTitle, { color: colors.text }]}>{subscriptionStatusFilter === 'active' ? 'Nenhuma assinatura ativa' : 'Nenhuma assinatura cancelada.'}</Text>
+                {subscriptionStatusFilter === 'active' && <Text style={[styles.subscriptionsEmptySubtitle, { color: colors.textSecondary }]}>Adicione suas assinaturas para acompanhar seus gastos recorrentes.</Text>}
                 {subscriptionStatusFilter === 'active' && (
                   <TouchableOpacity onPress={handleCreateSubscription} style={styles.subscriptionsEmptyButton} activeOpacity={0.82}>
                     <Text style={styles.subscriptionsEmptyButtonText}>Adicionar assinatura</Text>
@@ -602,7 +602,7 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
               return (
                 <TouchableOpacity
                   key={sub.id}
-                  style={[styles.subscriptionListCard, { backgroundColor: isDarkMode ? '#1E1E26' : '#FFFFFF', borderColor: isDarkMode ? '#2D2D3A' : '#E8EBF4' }]}
+                  style={[styles.subscriptionListCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => handleEditSubscription(sub)}
                   onLongPress={() => handleDeleteSubscription(sub)}
                   activeOpacity={0.86}
@@ -614,22 +614,22 @@ export const StatementScreen: React.FC<StatementScreenProps> = ({ section = 'tra
                     <Text style={[styles.subscriptionCardName, { color: colors.text }]} numberOfLines={1}>{sub.name}</Text>
                     <View style={styles.subscriptionAmountRow}>
                       <Text style={[styles.subscriptionCardAmount, { color: colors.text }]} numberOfLines={1}>{formatCurrency(sub.amount)}</Text>
-                      <Text style={styles.subscriptionCardPeriod} numberOfLines={1}>/ {getSubscriptionCycleLabel(sub)}</Text>
+                      <Text style={[styles.subscriptionCardPeriod, { color: colors.textSecondary }]} numberOfLines={1}>/ {getSubscriptionCycleLabel(sub)}</Text>
                     </View>
-                    <Text style={styles.subscriptionCardDate} numberOfLines={1}>Próxima cobrança: {nextBilling}</Text>
+                    <Text style={[styles.subscriptionCardDate, { color: colors.textSecondary }]} numberOfLines={1}>Próxima cobrança: {nextBilling}</Text>
                   </View>
-                  <ChevronRight size={22} color="#10152F" strokeWidth={2.5} />
+                  <ChevronRight size={22} color={colors.text} strokeWidth={2.5} />
                 </TouchableOpacity>
               );
             })}
 
-            <View style={styles.subscriptionTipCard}>
-              <View style={styles.subscriptionTipIcon}>
+            <View style={[styles.subscriptionTipCard, { backgroundColor: colors.primaryLight }]}>
+              <View style={[styles.subscriptionTipIcon, { backgroundColor: colors.surfaceVariant }]}>
                 <Lightbulb size={28} color={PRIMARY} strokeWidth={2.2} />
               </View>
               <View style={styles.subscriptionTipCopy}>
                 <Text style={styles.subscriptionTipTitle}>Dica do Numvra</Text>
-                <Text style={styles.subscriptionTipText}>Revise suas assinaturas regularmente e cancele o que não usa mais. Isso pode gerar uma grande economia!</Text>
+                <Text style={[styles.subscriptionTipText, { color: colors.textSecondary }]}>Revise suas assinaturas regularmente e cancele o que não usa mais. Isso pode gerar uma grande economia!</Text>
               </View>
             </View>
           </View>

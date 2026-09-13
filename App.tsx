@@ -7,6 +7,8 @@ import { CategoryProvider } from './src/contexts/CategoryContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { pushNotificationService } from './src/services/pushNotificationService';
 import { configureTypography } from './src/theme/configureTypography';
+import { StripeProvider } from '@stripe/stripe-react-native';
+import { STRIPE_PUBLISHABLE_KEY } from './src/config/subscriptionConfig';
 
 configureTypography();
 
@@ -48,15 +50,18 @@ const AppContent: React.FC = () => {
 };
 
 export default function App() {
+  const content = (
+    <ThemeProvider>
+      <AuthProvider>
+        <CategoryProvider>
+          <AppContent />
+        </CategoryProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  );
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <CategoryProvider>
-            <AppContent />
-          </CategoryProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY} urlScheme="numvra" setReturnUrlSchemeOnAndroid>{content}</StripeProvider>
     </SafeAreaProvider>
   );
 }

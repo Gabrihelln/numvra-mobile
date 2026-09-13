@@ -32,7 +32,7 @@ const getErrorMessage = (status: number) => {
 export const api = {
   getBaseUrl: getApiBaseUrl,
 
-  async request<T>(path: string, options: RequestInit = {}, authenticated = false): Promise<T> {
+  async request<T>(path: string, options: RequestInit = {}, authenticated = false, authToken?: string): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -43,7 +43,7 @@ export const api = {
       if (authenticated) {
         const currentUser = auth.currentUser;
         if (!currentUser) throw new ApiError('Faça login novamente para continuar.', 401);
-        headers.set('Authorization', `Bearer ${await currentUser.getIdToken()}`);
+        headers.set('Authorization', `Bearer ${authToken || await currentUser.getIdToken()}`);
       }
 
       const response = await fetch(`${getApiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`, {
@@ -74,15 +74,16 @@ export const api = {
     return this.request<T>(path, { method: 'GET' }, authenticated);
   },
 
-  post<T>(path: string, body: unknown, authenticated = true) {
+  post<T>(path: string, body: unknown, authenticated = true, extraHeaders?: Record<string, string>, authToken?: string) {
     return this.request<T>(
       path,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) },
         body: JSON.stringify(body),
       },
       authenticated,
+      authToken,
     );
   },
 };

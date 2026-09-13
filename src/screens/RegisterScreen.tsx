@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import {
 } from '../components/auth/AuthScaffold';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthStackParamList } from '../navigation/types';
+import { lightColors } from '../theme/colors';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
 type AuthLoadingType = 'email' | 'google' | 'apple' | null;
@@ -25,6 +26,7 @@ export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const { signUp, signInWithGoogle, signInWithApple } = useAuth();
+  const colors = lightColors;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -107,7 +109,7 @@ export const RegisterScreen: React.FC = () => {
   const isLoading = loadingType !== null;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TopBlob>
         <BlobCopy light={'Pequenos\npassos,'} strong={'grandes\nconquistas.'} />
       </TopBlob>
@@ -187,9 +189,9 @@ export const RegisterScreen: React.FC = () => {
 
         <View style={styles.socialSection}>
           <View style={styles.dividerRow}>
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={styles.dividerText}>Ou cadastre com</Text>
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
           </View>
           <View style={styles.socialRow}>
             <SocialButton provider="google" loading={loadingType === 'google'} disabled={isLoading} onPress={handleGoogleLogin} />
