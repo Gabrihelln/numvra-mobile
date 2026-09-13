@@ -195,12 +195,14 @@ export const RegisterScreen: React.FC = () => {
           </View>
           <View style={styles.socialRow}>
             <SocialButton provider="google" loading={loadingType === 'google'} disabled={isLoading} onPress={handleGoogleLogin} />
-            <SocialButton
-              provider="apple"
-              loading={loadingType === 'apple'}
-              disabled={isLoading || (Platform.OS === 'ios' && !isAppleAvailable)}
-              onPress={handleAppleLogin}
-            />
+            {Platform.OS === 'ios' && (
+              <SocialButton
+                provider="apple"
+                loading={loadingType === 'apple'}
+                disabled={isLoading || !isAppleAvailable}
+                onPress={handleAppleLogin}
+              />
+            )}
           </View>
         </View>
       </ScrollView>
