@@ -22,7 +22,7 @@ export const LandingScreen: React.FC = () => {
   const { user, loading } = useAuth();
   const colors = lightColors;
   const isDarkMode = false;
-  const [isSplashing, setIsSplashing] = useState(true);
+  const [isSplashing] = useState(false);
 
   const logoYAnim = useRef(new Animated.Value(0)).current;
   const logoScaleAnim = useRef(new Animated.Value(1.15)).current;
@@ -35,7 +35,6 @@ export const LandingScreen: React.FC = () => {
     }
 
     const timer = setTimeout(() => {
-      setIsSplashing(false);
       Animated.parallel([
         Animated.spring(logoYAnim, {
           toValue: -20,

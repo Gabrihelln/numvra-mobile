@@ -29,6 +29,7 @@ import {
   Palette,
   Pencil,
   PieChart,
+  Repeat,
   Shield,
   Target,
   UserCircle,
@@ -546,6 +547,7 @@ export const ProfileScreen: React.FC = () => {
         <ProfileSection title="Finanças" isDarkMode={isDarkMode}>
           <ProfileMenuItem icon={Landmark} title="Minhas contas" subtitle="Bancos, carteiras e Open Finance" onPress={() => navigation.navigate('Accounts')} isDarkMode={isDarkMode} />
           <ProfileMenuItem icon={CreditCard} title="Meus cartões" subtitle="Gerencie seus cartões de crédito" onPress={() => navigation.navigate('MainTabs', { screen: 'Cards' })} isDarkMode={isDarkMode} />
+          <ProfileMenuItem icon={Repeat} title="Assinaturas" subtitle="Acompanhe suas cobranças recorrentes" onPress={() => navigation.navigate('Subscriptions')} isDarkMode={isDarkMode} />
           <ProfileMenuItem icon={Target} title="Minhas metas" subtitle="Acompanhe seus objetivos" onPress={() => navigation.navigate('Goals')} isDarkMode={isDarkMode} />
           <ProfileMenuItem icon={PieChart} title="Limites por categoria" subtitle="Defina seus orçamentos" onPress={() => navigation.navigate('CategoryLimits')} isLast isDarkMode={isDarkMode} />
         </ProfileSection>
