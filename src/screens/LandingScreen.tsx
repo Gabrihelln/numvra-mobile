@@ -26,7 +26,7 @@ export const LandingScreen: React.FC = () => {
 
   const logoYAnim = useRef(new Animated.Value(0)).current;
   const logoScaleAnim = useRef(new Animated.Value(1.15)).current;
-  const buttonYAnim = useRef(new Animated.Value(60)).current;
+  const buttonOpacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!loading && user) {
@@ -48,17 +48,16 @@ export const LandingScreen: React.FC = () => {
           tension: 30,
           useNativeDriver: true,
         }),
-        Animated.spring(buttonYAnim, {
-          toValue: 0,
-          friction: 8,
-          tension: 40,
+        Animated.timing(buttonOpacityAnim, {
+          toValue: 1,
+          duration: 320,
           useNativeDriver: true,
         }),
       ]).start();
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [user, loading, logoYAnim, logoScaleAnim, buttonYAnim]);
+  }, [user, loading, logoYAnim, logoScaleAnim, buttonOpacityAnim]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -83,7 +82,7 @@ export const LandingScreen: React.FC = () => {
           style={[
             styles.buttonContainer,
             {
-              transform: [{ translateY: buttonYAnim }],
+              opacity: buttonOpacityAnim,
             },
           ]}
         >

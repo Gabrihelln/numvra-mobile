@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
@@ -23,9 +23,27 @@ import { useAuth } from '../contexts/AuthContext';
 import { SplashVisual } from '../screens/SplashScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const SPLASH_ANIMATION_DURATION_MS = 800;
+
 export const RootNavigator: React.FC = () => {
   const { colors, isDarkMode } = useTheme();
   const { user, loading } = useAuth();
+  const [isSplashAnimationReady, setIsSplashAnimationReady] = useState(false);
+  const [isSplashAnimationDone, setIsSplashAnimationDone] = useState(false);
+
+  const handleSplashAnimationReady = useCallback(() => {
+    setIsSplashAnimationReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isSplashAnimationReady) return;
+
+    const timer = setTimeout(() => {
+      setIsSplashAnimationDone(true);
+    }, SPLASH_ANIMATION_DURATION_MS);
+
+    return () => clearTimeout(timer);
+  }, [isSplashAnimationReady]);
 
   const navigationTheme = isDarkMode
     ? {
@@ -51,8 +69,8 @@ export const RootNavigator: React.FC = () => {
         },
       };
 
-  if (loading) {
-    return <SplashVisual />;
+  if (loading || !isSplashAnimationDone) {
+    return <SplashVisual onAnimationReady={handleSplashAnimationReady} />;
   }
 
   return (
@@ -107,4 +125,3 @@ export const RootNavigator: React.FC = () => {
     </NavigationContainer>
   );
 };
-
